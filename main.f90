@@ -59,7 +59,7 @@ real(PR) :: CFL=0.5_PR
 
       !call test_convection(M)
       
-      call test_SOD_air(M)
+      !call test_SOD_air(M)
 
       !call test_snes
 
@@ -76,7 +76,7 @@ real(PR) :: CFL=0.5_PR
 
       !call test_epoxy_spinel_strong(M)
 
-      !call test_rar_rar(M)
+      call test_rar_rar(M)
 
       !call test_cavitation(M)
 
