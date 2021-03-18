@@ -1,0 +1,51 @@
+
+nom=rar-rar
+
+
+Ndim=1
+Nx=200
+Ny=1
+Nz=1
+
+Lx=1.0
+Ly=1.0
+Lz=1.0
+
+Noutput=100
+dtoutput=1.0e-5
+
+Nl=1
+1 -> 1
+
+MATERIAUX
+Nmat=2
+
+mat 1
+typ=1
+filemat=materiaux/Air.dat
+endmat
+
+mat 2
+typ=1
+filemat=materiaux/Air.dat
+endmat
+
+
+#---initialization des champs!
+
+!!!================================ 
+!!! boite rectangulaire: 
+!!! box=1 [x1 x2 y1 y2 z1 z2] 
+!!! sphere: 
+!!! box=2 [xc, yc, zc,  R] 
+!!! cylindre: 
+!!! box=3 [dir, xc, yc, zc, D, L] 
+!!!================================ 
+
+Nboite=1
+box=1 [0.0  0.5  -1e9  1e9 -1e9  1e9]  
+
+
+
+
+FIN
