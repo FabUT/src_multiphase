@@ -56,10 +56,6 @@ real(PR), parameter :: RBohr=h**2*eps0/(pi*meSI*qe**2) !!! Bohr radius
 !real(PR) :: lamb0(92) ! reference thermal conductivities for solids at T=300 K
 !real(PR) :: lambmax(92) ! max thermal conductivity before scaling 
 
-
-
-
-
 integer :: iout=6
 
 integer :: it
@@ -176,7 +172,71 @@ type mesh
 
 end type mesh
 
+!!!----- Objet matériau
 
+type materiaux
+
+    character(len=20) :: nom='--'
+    integer :: Z,A,id
+    integer :: typ=1 
+    character(len=100) :: filemat=''
+    integer :: matfiletype=1
+    !---rho,T,P
+    real(PR) :: rho=1.0_PR, T=300.0_PR, P=101325.0_PR, U=3.0e5_PR
+    !---etat de reference
+    real(PR) :: rho0=1.0_PR, T0=300.0_PR, P0=101325.0_PR, U0=3.0e5_PR
+    !---propriétés thermiques
+    real(PR) :: lambda=0.1_PR !!! (W/m/K)
+    real(PR) :: Cv=1000.0_PR
+    !---propriétés electromag
+    real(PR) :: sigma=1.0e-6_PR  !!! (S/m)
+    real(PR) :: epsr=1.0_PR !!! permittivitÃ© relative
+    real(PR) :: mur=1.0_PR
+    !---propriétés radiatives
+    real(PR) :: kappa=1.0e-20_PR
+    real(PR) :: eps=1.0_PR  !!! emissivité
+    !---EOS SGE
+    real(PR) :: pinf=0.0_PR
+    real(PR) :: gam=1.4_PR
+    real(PR) :: q=0.0_PR
+    real(PR) :: qp=0.0_PR
+    !---propriétés geometriques
+    real(PR) :: R, ep, sec
+    !--- numero de table (typ=2)
+    integer :: itab=0
+end type materiaux
+
+type input_data
+
+    integer  :: Ndim=1
+
+    character(len=200) :: nom='no name'
+
+    !!!---Maillage:
+    integer  :: Nx=1
+    integer  :: Ny=1
+    integer  :: Nz=1
+    real(PR) :: Lx=1.0_PR
+    real(PR) :: Ly=1.0_PR
+    real(PR) :: Lz=1.0_PR
+
+    !!!---Temps:
+    integer  :: Noutput=1
+    real(PR) :: dtoutput=1.0e-6_PR
+
+    !!!---fluides:
+    integer :: Nl=1
+
+    !!!---matériaux:
+    integer :: Nmat
+    type(materiaux), allocatable :: mat(:)
+
+    !!!---affectations fluides -> materiaux
+    integer, allocatable :: f2m(:) !!! Nl
+
+end type
+
+type(input_data) :: Input
 
 !contains
 !

@@ -21,13 +21,16 @@ LIBS=\
 
 ###
 
-list=mod_data.o mod_mat_tab.o mod_Fermi_Dirac.o air_ETL.o mod_euler.o mod_elec.o mod_output.o 
+list=mod_data.o mod_input.o mod_mat_tab.o mod_Fermi_Dirac.o air_ETL.o mod_euler.o mod_elec.o mod_output.o 
 
 #multi:  main.f90 $(list)
 #	$(F90) $(opt) $(list) $(LIBS) $< -o $@
 
 multi:  main.f90 $(list)
 	$(F90) $(opt) $(list) $< -o $@
+
+mod_input.o mod_input.mod: mod_input.f90
+	$(F90) $(opt) -c $< 
 
 mod_euler.o mod_euler.mod: mod_euler.f90
 	$(F90) $(opt) -c $< 

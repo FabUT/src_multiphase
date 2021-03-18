@@ -3,6 +3,8 @@ program multi
                      
 use mod_data
 
+use mod_input, only : load_input
+
 use mod_euler, only : Nl, Nx,init_euler, solve_euler, dtcfl,&
                       ph, soundspeed_mixt,&
                       test_convection, test_SOD_air, test_eau_air,&
@@ -54,6 +56,8 @@ real(PR) :: CFL=0.5_PR
    write(iout,*) ""
    write(iout,fmt='(A)') "INITIALISATION"
    write(iout,*) ""
+
+   call load_input
 
       !call init_euler(100,1,1,2)
 
