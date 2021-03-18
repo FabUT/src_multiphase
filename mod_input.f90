@@ -1,6 +1,6 @@
 module mod_input
 
-use mod_data, only : iout, Input, materiaux, PR, Pi
+use mod_data, only : iout, Input, materiaux, PR, Pi, boite
 
 implicit none
 
@@ -302,6 +302,28 @@ do while(.not.fin)
             endif !!! Nmat>0
         endif !!! MATERIAUX
 
+
+        !!!___boites
+        if(index(dump,'Nboite=').ne.0)then
+            i=index(dump,'=')
+            read(dump(i+1:),*) Input%Nboite
+            write(iout,'(A,I2)') '   Nboite=', Input%Nboite
+            if(Input%Nboite.gt.0)then
+              allocate(Input%box(1:Input%Nboite))
+              k=0
+              do while(k.lt.Input%Nboite)
+                  read(id,'(A)') dump
+                  if(scan(dump,'!#').eq.0)THEN
+                    i=index(dump,'box=')
+                    if(i.gt.0)then
+                       k=k+1
+                       call readbox(dump(i:),Input%box(k))
+                    endif
+                  endif
+              enddo
+            endif
+        endif
+
         IF(index(dump,'FIN').ne.0)then
             FIN=.true.
         ENDIF
@@ -501,6 +523,194 @@ subroutine read_mat(file_in,mat)
 
 end subroutine read_mat
 
+subroutine readbox(dump,box)
 
+   implicit none
+   character(len=*), intent(in) :: dump
+   type(boite), intent(out) :: box
+   integer :: j1,j2,j3
+
+   j1=index(dump,'box=')
+   j2=index(dump,'[')
+   j3=index(dump,']')
+
+   if(j1.eq.0)then
+      write(iout,'(A)') 'error reading box: j1'
+      write(iout,'(A)') dump
+      call flush(iout)
+   elseif(j2.eq.0)then
+      write(iout,'(A)') 'error reading box: j2'
+      write(iout,'(A)') dump
+      call flush(iout)
+   elseif(j3.eq.0)then
+      write(iout,'(A)') 'error reading box: j3'
+      write(iout,'(A)') dump
+      call flush(iout)
+   else
+
+      box%id=1
+
+      read(dump(j1+4:j2-1),*) box%forme
+      write(iout,'(A,I2)') '        > forme=', box%forme
+
+      if(box%forme.eq.1)then !!! boite rectangulaire
+         read(dump(j2+1:j3-1),*)  box%xmin, box%xmax, box%ymin, box%ymax, box%zmin, box%zmax
+         write(iout,"(A,6(ES12.5,' '),A2)") '        > [',box%xmin, box%xmax, box%ymin, box%ymax, box%zmin, box%zmax,' ]' 
+      elseif(box%forme.eq.2)then !!! sphere de centre x,y,z de rayon R
+         read(dump(j2+1:j3-1),*)  box%xc, box%yc, box%zc, box%R
+         write(iout,"(A,4(ES12.5,' '),A2)") '        > [',box%xc, box%yc, box%zc, box%R,' ]' 
+      elseif(box%forme.eq.3)then !!! cylindre de diametre D, de longueur L, centre du cercle de base en x,y,z
+         read(dump(j2+1:j3-1),*)  box%dir, box%xc, box%yc, box%zc, box%D, box%L
+         write(iout,"(A,A1,5(ES12.5,' '),A2)") '        > [', box%dir, box%xc, box%yc, box%zc, box%D, box%L, ' ]' 
+         box%R=0.5_PR*box%D 
+      elseif(box%forme.eq.4)then !!! cylindre creux entre Di et D de longueur L, centre du cercle de base en x,y,z
+         read(dump(j2+1:j3-1),*)  box%dir, box%xc, box%yc, box%zc, box%Di, box%D, box%L
+         write(iout,"(A,A1,6(ES12.5,' '),A2)") '        > [', box%dir, box%xc, box%yc, box%zc, box%Di, box%D, box%L, ' ]' 
+         box%R=0.5_PR*box%D
+         box%Ri=0.5_PR*box%Di
+      elseif(box%forme.eq.5)then !!! stripes: cylindre creux Di-D de longueur L et stripes entre teta1 et teta2:
+         read(dump(j2+1:j3-1),*)  box%dir, box%xc, box%yc, box%zc, box%Di, box%D, box%L, box%teta0, box%teta1, box%teta2
+         write(iout,"(A,A1,9(ES12.5,' '),A2)") '        > [', box%dir, box%xc, box%yc, box%zc, box%Di, box%D, box%L, &
+                                                           box%teta0, box%teta1, box%teta2, ' ]' 
+         box%R=0.5_PR*box%D
+         box%Ri=0.5_PR*box%Di
+         box%teta0=box%teta0*Pi/180.0_PR
+         box%teta1=box%teta1*Pi/180.0_PR
+         box%teta2=box%teta2*Pi/180.0_PR
+      endif
+ 
+
+   endif 
+
+end subroutine readbox
+
+logical function insidebox(x,y,z,box)
+
+   implicit none
+   real(PR), intent(in) :: x,y,z
+   type(boite), intent(in) :: box
+   real(PR) :: R, dx, dy, dz, teta
+
+   insidebox=.false.
+
+   if(box%id.eq.0)then
+
+      insidebox=.true.
+
+   elseif(box%forme.eq.1)then !!! paralellepipede rectange
+   
+      if( (x.ge.box%xmin.and.x.le.box%xmax) .and. &
+          (y.ge.box%ymin.and.y.le.box%ymax) .and. &
+          (z.ge.box%zmin.and.z.le.box%zmax) )then
+
+         insidebox=.true.
+
+      endif
+
+   elseif(box%forme.eq.2)then !!! sphere
+
+      R=sqrt((x-box%xc)**2+(y-box%yc)**2+(z-box%zc)**2)
+ 
+      if(R.lt.box%R)then
+
+         insidebox=.true.
+
+      endif
+
+   elseif(box%forme.ge.3.and.box%forme.le.6)then 
+   !!! cylindre plein(3)/creux(4)/creux avec stripes(5) 
+
+      R=1.0e30_PR ; teta=0.0_PR
+
+      if(box%dir.eq.'x')then
+         if(box%L.gt.0.0_PR)then 
+            if(x.gt.box%xc.and.x.lt.(box%xc+box%L))then
+               dy=(y-box%yc) ; dz=(z-box%zc)
+               R=sqrt(dy**2+dz**2)
+            endif
+         else
+            if(x.lt.box%xc.and.x.gt.(box%xc+box%L))then
+               dy=(y-box%yc) ; dz=(z-box%zc)
+               R=sqrt(dy**2+dz**2)
+            endif
+         endif
+      elseif(box%dir.eq.'y')then
+         if(box%L.gt.0.0_PR)then 
+            if(y.gt.box%yc.and.y.lt.(box%yc+box%L))then
+               dx=(x-box%xc) ; dz=(z-box%zc)
+               R=sqrt(dx**2+dz**2)
+            endif
+         else
+            if(y.lt.box%yc.and.y.gt.(box%yc+box%L))then
+               dx=(x-box%xc) ; dz=(z-box%zc)
+               R=sqrt(dx**2+dz**2)
+            endif
+         endif
+      elseif(box%dir.eq.'z')then
+         if(box%L.gt.0.0_PR)then 
+            if(z.gt.box%zc.and.z.lt.(box%zc+box%L))then
+               dx=(x-box%xc) ; dy=(y-box%yc) 
+               R=sqrt(dx**2+dy**2)
+            endif
+         else
+            if(z.lt.box%zc.and.z.gt.(box%zc+box%L))then
+               dx=(x-box%xc) ; dy=(y-box%yc) 
+               R=sqrt(dx**2+dy**2)
+            endif
+         endif
+      endif
+      if(R.lt.box%R)then
+         if(box%forme.eq.3)then !!! cylindre plein
+            insidebox=.true.
+         elseif(box%forme.eq.4)then !!! cylindre creux
+            if(R.gt.box%Ri)then 
+               insidebox=.true.            
+            endif
+         elseif(box%forme.eq.5)then !!! stripes
+            if(R.gt.box%Ri)then
+               if(box%dir.eq.'x')then 
+                  if(dy.ne.0.0_PR.or.dz.ne.0.0_PR) teta=atan2(dz,dy)
+               elseif(box%dir.eq.'y')then
+                  if(dx.ne.0.0_PR.or.dz.ne.0.0_PR) teta=atan2(dz,dx)
+               elseif(box%dir.eq.'z')then
+                  if(dx.ne.0.0_PR.or.dy.ne.0.0_PR) teta=atan2(dy,dx)
+               endif
+               if(teta.lt.0.0_PR) teta=teta+2.0_PR*Pi
+               teta=teta-box%teta0
+               insidebox=inside_dteta(teta,box%teta1,box%teta2)
+            endif 
+         endif
+      endif
+
+   endif !!! forme
+
+end function insidebox 
+
+recursive function inside_dteta(teta0, teta1, teta2) result(inside)
+
+   !!!---
+   !!! Check if there is k such that teta0 is between [k*teta1,k*teta2] 
+   !!!---
+   implicit none
+   logical :: inside
+   real(PR), intent(in) :: teta0
+   real(PR), intent(in) :: teta1, teta2
+   real(PR) :: teta
+
+   teta=teta0
+   inside=.false.
+
+   if(teta.gt.teta2)then
+      teta=teta-teta2
+      inside=inside_dteta(teta,teta1,teta2)
+   else
+      if(teta.gt.teta1)then
+         inside=.true.
+      else
+         inside=.false.
+      endif
+   endif
+
+end function inside_dteta
 
 end module mod_input
