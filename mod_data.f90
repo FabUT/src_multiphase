@@ -206,6 +206,15 @@ type materiaux
     integer :: itab=0
 end type materiaux
 
+type boite
+   integer :: id=0 !!! pour verifier si elle existe
+   integer :: forme=0 !!! 1: rectangle, 2: sphere
+   real(PR) :: xmin, xmax, ymin, ymax, zmin, zmax
+   real(PR) :: xc, yc, zc, R, Ri, D, Di, L
+   real(PR) :: teta0, teta1, teta2
+   character(len=1) :: dir='x' !!! x, y, z
+end type boite
+
 type input_data
 
     integer  :: Ndim=1
@@ -234,7 +243,11 @@ type input_data
     !!!---affectations fluides -> materiaux
     integer, allocatable :: f2m(:) !!! Nl
 
-end type
+    !!!---initialization
+    integer :: Nboite=0
+    type(boite), allocatable :: box(:)
+
+end type input_data
 
 type(input_data) :: Input
 
