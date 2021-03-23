@@ -14,7 +14,8 @@ use mod_euler, only : Nl, Nx,init_euler, solve_euler, dtcfl,&
                       test_relax3, test_Ndanou2015, test_meca,&
                       test_solid_solid_shock_tube, test_cavitation_Cu,&
                       test_advection_Cu,test_solid_gas_shock_tube,&
-                      test_epoxy_spinel, test_epoxy_spinel_strong
+                      test_epoxy_spinel, test_epoxy_spinel_strong,&
+                      init_euler_from_input
 
 
 use mod_elec, only : U,R,current,solve_elec
@@ -30,7 +31,6 @@ implicit none
 type(mesh) :: M
 integer :: iph, i,j,k,i2,j2,Nitloc
 real(PR) :: t, dtloc, cp, cv
-real(PR) :: CFL=0.5_PR
 
 !call test_lecture_tab
 
@@ -80,7 +80,8 @@ real(PR) :: CFL=0.5_PR
 
       !call test_epoxy_spinel_strong(M)
 
-      call test_rar_rar(M)
+      !call test_rar_rar(M)
+      call init_euler_from_input(M)
 
       !call test_cavitation(M)
 
@@ -109,6 +110,8 @@ real(PR) :: CFL=0.5_PR
       write(iout,*) 'sound speed:'
       do iph=1,M%Nl
         write(iout,*) 'phase:', iph, 'c=: ',ph(iph)%soundspeed(M%MF(1,1,1)%F(iph),M%MF(1,1,1)%F(iph)%rh,M%MF(1,1,1)%F(iph)%p)
+        write(iout,*) 'phase:', iph, 'rh= ', M%MF(1,1,1)%F(iph)%rh, ' p=', M%MF(1,1,1)%F(iph)%p,&
+            ' pinf=', M%MF(1,1,1)%F(iph)%p_sge, ' g_sge=', M%MF(1,1,1)%F(iph)%g_sge
       enddo
       write(iout,*) 'cf=: ',M%MF(1,1,1)%c
 
@@ -127,7 +130,7 @@ real(PR) :: CFL=0.5_PR
    
       !!!-----------------------  Sorties
    
-      dtloc=dtcfl(M,CFL)
+      dtloc=dtcfl(M,Input%CFL)
       Nitloc=floor(M%dt/dtloc)+1
    
       write(iout,fmt='(A13,I6,A3,I6,A3,ES14.7,A5,ES14.7,A5,I6)')&
@@ -154,7 +157,7 @@ real(PR) :: CFL=0.5_PR
       !endif
 
 
-      call SOLVE_euler(M,M%dt,CFL)
+      call SOLVE_euler(M,M%dt,Input%CFL)
 
  
       t=t+M%dt

@@ -146,6 +146,9 @@ type multifluide
    !!!---variable pour sorties
    real(PR) :: sonde(1:2)
 
+   !!!---tag
+   logical :: tag=.false.
+
 endtype multifluide
 
 
@@ -200,6 +203,9 @@ type materiaux
     real(PR) :: gam=1.4_PR
     real(PR) :: q=0.0_PR
     real(PR) :: qp=0.0_PR
+    !---propriétés méca
+    real(PR) :: mu=0.0_PR   !!! module de cisaillement
+    real(PR) :: sigy=0.0_PR !!! limite d'elasticité
     !---propriétés geometriques
     real(PR) :: R, ep, sec
     !--- numero de table (typ=2)
@@ -214,6 +220,13 @@ type boite
    real(PR) :: teta0, teta1, teta2
    character(len=1) :: dir='x' !!! x, y, z
 end type boite
+
+type init_field
+    type(boite) :: box
+    integer :: Nvar=0
+    character(len=10) :: nom(1:30)=''
+    real(PR)          :: val(1:30)=0.0_PR
+endtype init_field
 
 type input_data
 
@@ -232,9 +245,25 @@ type input_data
     !!!---Temps:
     integer  :: Noutput=1
     real(PR) :: dtoutput=1.0e-6_PR
+    real(PR) :: CFL=0.5_PR
 
     !!!---fluides:
     integer :: Nl=1
+
+    !!!---time-scheme:
+    character(len=10) :: tscheme='RK1'
+
+    !!!---soundspeed_mixt
+    integer :: soundspeed_mixt=1 ! 1: frozen 2: Wood
+
+    !!!---reconstruction
+    character(len=10) :: reco='NOREC'
+
+    !!!---Limiteur
+    character(len=10) :: Limiteur='MINMOD'
+
+    !!!---Just thermo
+    integer :: just_thermo=0
 
     !!!---matériaux:
     integer :: Nmat
@@ -243,9 +272,12 @@ type input_data
     !!!---affectations fluides -> materiaux
     integer, allocatable :: f2m(:) !!! Nl
 
+    !!!---affectations fluides -> EOS
+    integer, allocatable :: EOS(:) !!! Nl: 1: gp, 2: SGE, 3: SGE2
+
     !!!---initialization
-    integer :: Nboite=0
-    type(boite), allocatable :: box(:)
+    integer :: Nfield=0
+    type(init_field), allocatable :: field(:)
 
 end type input_data
 

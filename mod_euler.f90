@@ -1,7 +1,9 @@
 module mod_euler
 
 
-use mod_data, only : it, PR, iout, mesh, multifluide, fluide, radial
+use mod_data, only : it, PR, iout, mesh, multifluide, fluide, radial, Input
+
+use mod_input, only : init_fields_from_input
 
 use air_ETL, only : specific_heat 
 
@@ -43,9 +45,11 @@ procedure(NOREC), pointer :: RECO => NULL()
 procedure(MINMOD), pointer :: Limiteur => NULL()
 procedure(src_euler1D), pointer :: SRC => NULL()
 procedure(RK1), pointer :: Timescheme => NULL()
+procedure(soundspeed_mixt_frozen), pointer :: soundspeed_mixt => NULL()
 
 type :: phase
    integer :: typ=1 !!! 1: sge, 2: tab
+   integer ::imat=0 !!! si typ=3
    character(len=50) :: filetab=''
    character(len=50) :: nom=''
    real(PR) :: p_sge, g_sge, mu, sigy, rho0, cv, sig, ener0, q_sge, qp_sge
@@ -57,7 +61,6 @@ type :: phase
 end type phase
 
 type(phase), allocatable :: ph(:)
- 
 
 !!!---taille du maillage
 integer :: N1D,Nx,Ny,Nz
@@ -342,6 +345,316 @@ end subroutine solve_euler
 
 !!!======================== SUBROUTINE D'INITIALISATION =============================
 
+subroutine init_euler_from_input(M) 
+
+   implicit none
+   type(mesh), intent(inout) :: M
+   integer :: i,j,k,iph
+
+   write(iout,*) 'call init START !!!'
+
+   Nx=Input%Nx
+   Ny=Input%Ny
+   Nz=Input%Nz
+   Nl=Input%Nl
+
+   M%Nx=Nx
+   M%Ny=Ny
+   M%Nz=Nz
+   M%Nl=Nl
+   M%Lx=Input%Lx
+   M%Ly=Input%Ly
+   M%Lz=Input%Lz
+   M%Nt=Input%Noutput
+   M%dt=Input%dtoutput
+
+   !!!---MAILLAGE :
+
+   call compute_mesh(M)
+
+   !!!---ALLOCATION DES TABLEAUX
+   write(iout,*) ""
+   write(iout,fmt='(A)') "ALLOCATION DES TABLEAUX"
+   write(iout,*) ""
+
+   !!!---allocation de l'objet Fluide:
+
+   allocate(M%MF(1:Nx,1:Ny,1:Nz))
+  
+   !!!---initialization de l'objet fluide
+   DO k=1,Nz ; DO j=1,Ny ; DO i=1,Nx
+    call init_multifluide(M%MF(i,j,k)) 
+   ENDDO ; ENDDO ; ENDDO
+
+   !!!---nombre d'équations à résoudre partie conservative
+   Neq=Nl+4 
+
+   !!!!---vecteur 1D geometrique
+   allocate(SVL(0:Nx+1))  ; SVL=0.0_PR
+   allocate(SVR(0:Nx+1))  ; SVR=0.0_PR
+   allocate(Sgeo(0:Nx+1)) ; Sgeo=0.0_PR
+
+   !!!---vecteur 1D pour spltting directionnel:
+   allocate(MF1D(0:Nx+1))
+   do i=0,Nx+1
+      call init_multifluide(MF1D(i)) 
+   enddo
+
+   !!!!---vecteur 1D des variavles conservatives :
+   allocate(U(1:Neq,0:nx+1))    ; U(:,:)=0.0_PR
+   allocate(dUdt(1:Neq,0:nx+1)) ; dUdt(:,:)=0.0_PR
+   !!!!---vecteur 1D non-conservatif : fraction volumique + Finger tensor +
+   !!                               énergie hydro de chaque phase   
+   allocate(G(1:Nl,1:11,0:nx+1))    ; G(:,:,:)=0.0_PR
+   allocate(dGdt(1:Nl,1:11,0:nx+1)) ; dGdt(:,:,:)=0.0_PR
+
+   !!!---tableaux 1D pour la reconstruction
+
+   if(Reconstruct)then
+      allocate(MFrec_L(0:Nx+1))
+      allocate(MFrec_R(0:Nx+1))
+      DO i=1,Nx
+       call init_multifluide(MFrec_L(i)) 
+       call init_multifluide(MFrec_R(i)) 
+      ENDDO
+   endif
+
+   !!!---initialisation du solveur SNES pour la relaxation de la pression
+
+   call init_relaxp
+
+   !!!---vecteur 1D des variables primitives
+   !Nprim=9+Nl*13
+
+   !write(iout,*) '  Nprim=', Nprim  
+   !allocate(W1(1:Nprim,1:Nx))
+   !allocate(W_L(1:Nprim,1:Nx))
+   !allocate(W_R(1:Nprim,1:Nx))
+
+   !!!================= AFFECTATION PHASE -> MATERIAUX =================
+
+   allocate(ph(1:Nl))
+   do iph=1,Nl
+      ph(iph)%typ=3
+      ph(iph)%imat=Input%f2m(iph)
+   enddo
+   call init_phase(M)
+
+   !!!---Soundspeed of the mixture:
+   if(Input%soundspeed_mixt.eq.2)then
+      soundspeed_mixt => soundspeed_mixt_Wood
+   else
+      soundspeed_mixt => soundspeed_mixt_frozen
+   endif
+
+   !!!---Reconstruction
+
+   if(trim(adjustl(Input%reco)).eq.'NOREC')then
+        Reconstruct=.false.
+   elseif(trim(adjustl(Input%reco)).eq.'MUSCL')then
+        Reconstruct=.true.
+   endif
+
+   !!!---Limiteur:
+   if(trim(adjustl(Input%reco)).eq.'MINMOD')then
+      Limiteur => MINMOD
+   elseif(trim(adjustl(Input%reco)).eq.'VANLEER')then
+      Limiteur => VANLEER
+   endif
+
+   !!!---Timescheme:
+   if(trim(adjustl(Input%tscheme)).eq.'RK3')then
+
+      !!!---tableaux de travail RK3
+      allocate(U0(1:Neq,0:nx+1))      ; U0(:,:)=0.0_PR
+      allocate(G0(1:Nl,1:11,0:nx+1))  ; G0(:,:,:)=0.0_PR
+      !allocate(F0(0:Nx+1))
+      allocate(U1(1:Neq,0:nx+1))      ; U1(:,:)=0.0_PR
+      allocate(G1(1:Nl,1:11,0:nx+1))  ; G1(:,:,:)=0.0_PR
+
+      Timescheme => RK3
+
+   elseif(trim(adjustl(Input%tscheme)).eq.'RK2')then
+
+      !!!---tableaux de travail RK2
+      allocate(U0(1:Neq,0:nx+1))      ; U0(:,:)=0.0_PR
+      allocate(G0(1:Nl,1:11,0:nx+1))  ; G0(:,:,:)=0.0_PR
+      !allocate(F0(0:Nx+1))
+
+      Timescheme => RK2 !!!_SSP
+
+   elseif(trim(adjustl(Input%tscheme)).eq.'RK2_SSP')then
+
+      !!!---tableaux de travail RK2
+      allocate(U0(1:Neq,0:nx+1))      ; U0(:,:)=0.0_PR
+      allocate(G0(1:Nl,1:11,0:nx+1))  ; G0(:,:,:)=0.0_PR
+      !allocate(F0(0:Nx+1))
+
+      Timescheme => RK2_SSP
+
+   elseif(trim(adjustl(Input%tscheme)).eq.'RK1')then
+
+      Timescheme => RK1
+ 
+   elseif(trim(adjustl(Input%tscheme)).eq.'COMPACT')then
+
+      Timescheme => COMPACT
+ 
+   else
+      print*, ' ö please select a time integrator' ; stop
+   endif
+
+   !!!---SRC:
+
+   if(Input%just_thermo.eq.1)then
+      SRC => src_EM
+   else
+      SRC => src_euler1D
+   endif
+
+   !!!---Temps:
+   Teuler=0.0_PR ; Trelax=0.0_PR
+
+   !!!--- Initialisation des champs:
+
+   write(iout,*) '   initialisation de fv,p,v,r' 
+
+   call init_fields_from_input(M)
+
+   forall(i=1:M%Nx,j=1:M%Ny,k=1:M%Nz) M%MF(i,j,k)%rh=sum(M%MF(i,j,k)%F(1:M%Nl)%f*M%MF(i,j,k)%F(1:M%Nl)%rh)
+
+   forall(iph=1:M%Nl,i=1:M%Nx,j=1:M%Ny,k=1:M%Nz) M%MF(i,j,k)%F(iph)%Y=M%MF(i,j,k)%F(iph)%f*M%MF(i,j,k)%F(iph)%rh/M%MF(i,j,k)%rh
+
+   do k=1,M%Nz ; do j=1,M%Ny ; do i=1,M%Nx ; do iph=1,M%Nl
+     !M%MF(i,j,k)%elh(iph)=ph(iph)%energie_hydro(iph,M%MF(i,j,k)%rhl(iph),M%MF(i,j,k)%pl(iph),M%MF(i,j,k))
+     !M%MF(i,j,k)%elh(iph)=energie_hydro_sge(M%MF(i,j,k)%g_sge(iph),M%MF(i,j,k)%p_sge(iph),M%MF(i,j,k)%rhl(iph),M%MF(i,j,k)%pl(iph))
+     M%MF(i,j,k)%F(iph)%eh=ph(iph)%energie_hydro(M%MF(i,j,k)%F(iph),M%MF(i,j,k)%F(iph)%rh,M%MF(i,j,k)%F(iph)%p)
+   enddo ; enddo ; enddo ; enddo
+
+   write(iout,*) ' MAJ meca'
+
+   do k=1,M%Nz ; do j=1,M%Ny ; do i=1,M%Nx
+
+    call MAJ_meca(M%MF(i,j,k))
+
+   enddo ; enddo ; enddo
+
+   write(iout,*) ' MAJ mixt'
+
+   do k=1,M%Nz ; do j=1,M%Ny ; do i=1,M%Nx
+
+   call MAJ_mixt(M%MF(i,j,k))
+
+   enddo ; enddo ; enddo
+
+   write(iout,*) 'call init from input FINI !!!'
+
+end subroutine init_euler_from_input
+
+subroutine compute_mesh(M)
+
+    implicit none
+    type(mesh), intent(inout) :: M
+    real(PR) :: Lx,Ly,Lz
+    integer :: i
+
+    write(iout,*) ""
+    write(iout,fmt='(A)') " call to compute mesh..."
+    write(iout,*) ""
+    Lx=M%Lx ; Ly=M%Ly ; Lz=M%Lz
+    write(iout,*) "Nx=",Nx, "Ny=", Ny, "Nz=",Nz 
+    write(iout,*) "Lx=",Lx, "Ly=", Ly, "Lz=",Lz 
+    write(iout,*) ""
+    write(iout,*) '   allocation des grandeurs géométriques'
+    allocate(M%x(1:nx))
+    allocate(M%xm(0:nx))
+    allocate(M%dx(1:nx))
+    allocate(M%dxm(0:nx))
+    allocate(M%y(1:ny))
+    allocate(M%ym(0:ny))
+    allocate(M%dy(1:ny))
+    allocate(M%dym(0:ny))
+    allocate(M%z(1:nz))
+    allocate(M%zm(0:nz))
+    allocate(M%dz(1:nz))
+    allocate(M%dzm(0:nz))
+    allocate(M%SVLx(0:nx+1))
+    allocate(M%SVRx(0:nx+1))
+    allocate(M%Sgeox(0:nx+1))
+    write(iout,*) '   valorisation'
+
+    !!!---X:
+    M%dx(:)=Lx/real(Nx,PR)
+    M%xm(0)=0.0_PR
+    M%xm(0)=2.0_PR*M%dx(1) 
+    do i=1,nx
+      M%xm(i)=M%xm(i-1)+M%dx(i)
+    enddo
+    do i=1,nx
+      M%x(i)=0.5_PR*(M%xm(i-1)+M%xm(i))
+    enddo
+    M%dxm(0)=2.0_PR*M%x(1)
+    do i=1,nx-1
+      M%dxm(i)=M%x(i+1)-M%x(i)
+    enddo
+    M%dxm(nx)=2.0_PR*(M%xm(nx)-M%x(nx))
+    if(radial)then
+       do i=1,Nx
+          M%SVLx(i)=M%xm(i)/(M%x(i)*M%dx(i))
+          M%SVRx(i)=M%xm(i)/((M%x(i)+M%dx(i))*M%dx(min(i+1,Nx)))
+          M%Sgeox(i)=1.0_PR/M%x(i)
+       enddo
+       M%Sgeox(1)=0.0_PR
+       !M%SVLx(0)=0.0_PR ; M%SVRx(0)=0.0_PR
+       M%SVLx(0)=M%SVLx(1) ; M%SVRx(0)=M%SVLx(1)
+       M%SVLx(Nx+1)=(M%xm(Nx)+M%dxm(Nx))/((M%x(Nx)+M%dx(Nx))*M%dx(Nx))
+       M%SVRx(Nx+1)=(M%xm(Nx)+M%dxm(Nx))/((M%x(Nx)+2.0_PR*M%dx(Nx))*M%dx(Nx))
+       M%Sgeox(0)=0.0_PR ; M%Sgeox(Nx+1)=1.0_PR/(M%x(Nx)+M%dx(Nx))
+    else
+      do i=1,Nx
+          M%SVLx(i)=1.0_PR/M%dx(i)
+          M%SVRx(i)=1.0_PR/M%dx(min(i+1,Nx))
+          M%Sgeox(i)=0.0_PR
+      enddo
+      M%SVLx(0)=M%SVLx(1) ; M%SVRx(0)=M%SVRx(1)
+      M%SVLx(Nx+1)=M%SVLx(Nx)
+      M%SVRx(Nx+1)=M%SVRx(Nx)
+      M%Sgeox(0)=0.0_PR ; M%Sgeox(Nx+1)=0.0_PR
+    endif 
+
+    !!---Y:
+    M%dy(:)=Ly/real(Ny,PR)
+    M%ym(0)=0.0_PR
+    do i=1,ny
+      M%ym(i)=M%ym(i-1)+M%dy(i)
+    enddo
+    do i=1,ny
+      M%y(i)=0.5_PR*(M%ym(i-1)+M%ym(i))
+    enddo
+    M%dym(0)=2.0_PR*M%y(1)
+    do i=1,ny-1
+      M%dym(i)=M%y(i+1)-M%y(i)
+    enddo
+    M%dym(ny)=2.0_PR*(M%ym(ny)-M%y(ny))
+    
+    !!!---Z:
+    M%dz(:)=Lz/real(Nz,PR)
+    M%zm(0)=0.0_PR
+    do i=1,nz
+      M%zm(i)=M%zm(i-1)+M%dz(i)
+    enddo
+    do i=1,nz
+      M%z(i)=0.5_PR*(M%zm(i-1)+M%zm(i))
+    enddo
+    M%dzm(0)=2.0_PR*M%z(1)
+    do i=1,nz-1
+      M%dzm(i)=M%z(i+1)-M%z(i)
+    enddo
+    M%dzm(nz)=2.0_PR*(M%zm(nz)-M%z(nz))
+
+end subroutine compute_mesh
+
+
 subroutine init_euler(nx_i,ny_i,nz_i,nl_i,Lx,Ly,Lz,M) 
 
    !use mod_data, only : Nl,Nx,Ny,Nz,&
@@ -554,7 +867,6 @@ subroutine init_euler(nx_i,ny_i,nz_i,nl_i,Lx,Ly,Lz,M)
       !allocate(F0(0:Nx+1))
       allocate(U1(1:Neq,0:nx+1))      ; U1(:,:)=0.0_PR
       allocate(G1(1:Nl,1:11,0:nx+1))  ; G1(:,:,:)=0.0_PR
-
 
       Timescheme => RK3
 
@@ -1111,6 +1423,7 @@ subroutine conservative2primitive(U,G,MF) !!!!fl,Yl,rhl,pl,elh,al,bl,cl,rh,vx,vy
 
      MF%F(1:Nl)%f=G(1:Nl,1)
 
+     write(iout,*) ' al1 1:', MF%F(1)%a(1)
 
      do iph=1,Nl
         if(a2A)then
@@ -1122,6 +1435,7 @@ subroutine conservative2primitive(U,G,MF) !!!!fl,Yl,rhl,pl,elh,al,bl,cl,rh,vx,vy
         MF%F(iph)%b(1:3)=G(iph,5:7)*coeff
         MF%F(iph)%c(1:3)=G(iph,8:10)*coeff
      enddo
+     write(iout,*) ' al1 2:', MF%F(1)%a(1)
 
      !!!---V1
 
@@ -1865,9 +2179,24 @@ end function soundspeed_tab
 
 
 !!!============== EOS MIXT ==================
+real(PR) function soundspeed_mixt_Wood(MF) 
 
+   implicit none 
+   type(multifluide), intent(in) :: MF 
+   real(PR) :: c1
+   integer :: iph
 
-real(PR) function soundspeed_mixt(MF) 
+   !!!---Wood speed of sound:
+   c1=0.0_PR
+   do iph=1,Nl
+     c1=c1+MF%F(iph)%f/(MF%F(iph)%rh*ph(iph)%soundspeed(MF%F(iph),MF%F(iph)%rh,MF%F(iph)%p)**2)
+   enddo
+   c1=c1*MF%rh
+   soundspeed_mixt_Wood=sqrt(1.0_PR/c1)
+
+end function soundspeed_mixt_Wood
+
+real(PR) function soundspeed_mixt_frozen(MF) 
 
    implicit none 
    type(multifluide), intent(in) :: MF 
@@ -1879,7 +2208,7 @@ real(PR) function soundspeed_mixt(MF)
    do iph=1,Nl
      c1=c1+MF%F(iph)%Y*(ph(iph)%soundspeed(MF%F(iph),MF%F(iph)%rh,MF%F(iph)%p))**2
    enddo
-   soundspeed_mixt=sqrt(c1)
+   soundspeed_mixt_frozen=sqrt(c1)
 
    !!!---Wood speed of sound:
    !c1=0.0_PR
@@ -1895,7 +2224,7 @@ real(PR) function soundspeed_mixt(MF)
    !enddo
    !c(i,j,k)=c1
 
-end function soundspeed_mixt
+end function soundspeed_mixt_frozen
 
 real(PR) function pressure_mixt(MF)
 
@@ -3051,7 +3380,6 @@ subroutine relax_p_sge_1(MF)
 
 end subroutine relax_p_sge_1
 
-
 subroutine reset_internal_energy(U,MF)
 
    implicit none
@@ -3084,7 +3412,6 @@ subroutine reset_internal_energy(U,MF)
    !   !coeff=(F%rhl(iph)/(F%rho0(iph)*detFT12))
    !   !F%al(iph,1:3)=F%al(iph,1:3)*coeff
    enddo
-
 
    !call MAJ_meca(F)
 
@@ -5274,6 +5601,25 @@ subroutine NOREC(N,MF,U,G)
 
 end subroutine NOREC
 
+!!! subroutine NOREC
+!!! 
+!!!    !!---pas de reconstruction
+!!! 
+!!!    implicit none
+!!!    integer :: i, ip1, iph, N
+!!! 
+!!!    N=N1D
+!!! 
+!!!    do i=1,N
+!!! 
+!!!       ip1=min(i+1,N) 
+!!! 
+!!!       MFrec_L(i)=MF1D(i)
+!!!       MFrec_R(i)=MF1D(ip1)
+!!! 
+!!!    enddo
+!!! 
+!!! end subroutine NOREC
 
 subroutine MUSCL
 
@@ -5687,11 +6033,6 @@ subroutine Reco_muscl2(Wim1,Wi,Wip1,WL,WR)
    endif
 
 end subroutine Reco_muscl2
-
-
-
-
-
 
 subroutine Reco_muscl(Wim1,Wi,Wip1,Wip2,WL,WR)
 
@@ -6430,18 +6771,19 @@ subroutine RK1(dt) !!!(Nl,N,SVL,SVR,ir,F,dt) !!!U,G,dt)
 
        !if(check_det) call check_rhodet('coucou1')
 
-  
        call relaxation
 
        !if(check_det) call check_rhodet('coucou2')
 
        call cpu_time(t1)
+
+       call reset_internal_energy(U(1:Nl+4,1),MF1D(1))
+       
        do i=1,N1D
           call reset_internal_energy(U(1:Nl+4,i),MF1D(i))
        enddo
        call cpu_time(t2)
        t_reset=t_reset+t2-t1
-
 
        do i=1,N1D
 
@@ -6831,31 +7173,31 @@ end subroutine crash
 
 subroutine init_multifluide(MF)
 
-   implicit none
-   type(multifluide), intent(inout) :: MF
-   integer :: i
-
-        !!!---grandeurs de mélange 
-        MF%rh=0.0_PR
-        MF%e=0.0_PR
-        MF%u=0.0_PR
-        MF%ee=0.0_PR
-        !!!---vitesses hydrodynamiques:
-        MF%vx=0.0_PR
-        MF%vy=0.0_PR
-        MF%vz=0.0_PR
-
-        !!!---grandeurs phasiques
-
-        !!!---propriétés physiques des matériaux (SG EOS ):
-        MF%Nl=Nl
-        allocate(MF%F(1:Nl))
-
-        !!!---matrice identité
-         Id(:,:)=0.0_PR
-         do i=1,3
-            Id(i,i)=1.0_PR
-         enddo 
+    implicit none
+    type(multifluide), intent(inout) :: MF
+    integer :: i
+    
+    !!!---grandeurs de mélange 
+    MF%rh=0.0_PR
+    MF%e=0.0_PR
+    MF%u=0.0_PR
+    MF%ee=0.0_PR
+    !!!---vitesses hydrodynamiques:
+    MF%vx=0.0_PR
+    MF%vy=0.0_PR
+    MF%vz=0.0_PR
+    
+    !!!---grandeurs phasiques
+    
+    !!!---propriétés physiques des matériaux (SG EOS ):
+    MF%Nl=Nl
+    allocate(MF%F(1:Nl))
+    
+    !!!---matrice identité
+    Id(:,:)=0.0_PR
+    do i=1,3
+       Id(i,i)=1.0_PR
+    enddo 
 
 end subroutine init_multifluide
 
@@ -6863,7 +7205,7 @@ subroutine init_phase(M)
 
    implicit none
    type(mesh), intent(inout) :: M
-   integer :: i,j,k,iph
+   integer :: i,j,k,iph,imat
    logical :: found
 
   !!!---présence de matériaux de type 2 ?
@@ -7028,7 +7370,24 @@ subroutine init_phase(M)
           ph(iph)%energie_hydro => energie_hydro_sge
           ph(iph)%pressure_star => pressure_star_sge 
 
-       endif
+      elseif(ph(iph)%typ.eq.3)then
+
+           imat=ph(iph)%imat
+           ph(iph)%p_sge=Input%mat(imat)%pinf
+           ph(iph)%g_sge=Input%mat(imat)%gam
+           ph(iph)%mu   =Input%mat(imat)%mu
+           ph(iph)%sigy =Input%mat(imat)%sigy
+           ph(iph)%rho0 =Input%mat(imat)%rho0
+           ph(iph)%cv   =Input%mat(imat)%cv
+           ph(iph)%sig  =Input%mat(imat)%sigma
+           ph(iph)%ener0=( 1.0e5_PR + ph(iph)%g_sge*ph(iph)%p_sge )/( (ph(iph)%g_sge - 1.0_PR)*ph(iph)%rho0 )
+
+           ph(iph)%soundspeed => soundspeed_sge 
+           ph(iph)%pressure => pressure_sge
+           ph(iph)%energie_hydro => energie_hydro_sge
+           ph(iph)%pressure_star => pressure_star_sge 
+
+      endif
 
    enddo 
 
@@ -7038,6 +7397,7 @@ subroutine init_phase(M)
       M%MF(i,j,k)%F(iph)%mu    = ph(iph)%mu
       M%MF(i,j,k)%F(iph)%sigy  = ph(iph)%sigy
       M%MF(i,j,k)%F(iph)%rh0   = ph(iph)%rho0
+      M%MF(i,j,k)%F(iph)%rh    = ph(iph)%rho0
    enddo; enddo; enddo ; enddo
 
 end subroutine init_phase

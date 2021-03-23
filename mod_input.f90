@@ -1,6 +1,6 @@
 module mod_input
 
-use mod_data, only : iout, Input, materiaux, PR, Pi, boite
+use mod_data, only : iout, Input, mesh, materiaux, PR, Pi, boite
 
 implicit none
 
@@ -9,7 +9,7 @@ contains
 subroutine LOAD_INPUT
 
 implicit none
-integer :: i,j,k,ierr,id
+integer :: i,j,k,l,N,ierr,id
 logical :: fin
 character(len=200) :: dump
 
@@ -32,99 +32,129 @@ do while(.not.fin)
         if(index(dump,'nom=').ne.0)then
             i=index(dump,'=')
             read(dump(i+1:),*) Input%nom
-            write(iout,'(A,A)') '   nom=', trim(adjustl(Input%nom))
+            write(iout,'(A,A)') '    nom=', trim(adjustl(Input%nom))
         endif
  
         !!!___dim
         if(index(dump,'Ndim=').ne.0)then
             i=index(dump,'=')
             read(dump(i+1:),*) Input%Ndim
-            write(iout,'(A,I2)') '   Ndim=', Input%Ndim
+            write(iout,'(A,I2)') '    Ndim=', Input%Ndim
         endif
     
         !!!___Nx
         if(index(dump,'Nx=').ne.0)then
             i=index(dump,'=')
             read(dump(i+1:),*) Input%Nx
-            write(iout,'(A,I6)') '   Nx=', Input%Nx
+            write(iout,'(A,I6)') '    Nx=', Input%Nx
         endif
  
         !!!___Ny
         if(index(dump,'Ny=').ne.0)then
             i=index(dump,'=')
             read(dump(i+1:),*) Input%Ny
-            write(iout,'(A,I6)') '   Ny=', Input%Ny
+            write(iout,'(A,I6)') '    Ny=', Input%Ny
         endif
  
         !!!___Nz
         if(index(dump,'Nz=').ne.0)then
             i=index(dump,'=')
             read(dump(i+1:),*) Input%Nz
-            write(iout,'(A,I6)') '   Nz=', Input%Nz
+            write(iout,'(A,I6)') '    Nz=', Input%Nz
         endif
  
         !!!___Lx
         if(index(dump,'Lx=').ne.0)then
             i=index(dump,'=')
             read(dump(i+1:),*) Input%Lx
-            write(iout,'(A,ES12.5)') '   Lx=', Input%Lx
+            write(iout,'(A,ES12.5)') '    Lx=', Input%Lx
         endif
  
         !!!___Ly
         if(index(dump,'Ly=').ne.0)then
             i=index(dump,'=')
             read(dump(i+1:),*) Input%Ly
-            write(iout,'(A,ES12.5)') '   Ly=', Input%Ly
+            write(iout,'(A,ES12.5)') '    Ly=', Input%Ly
         endif
  
         !!!___Lz
         if(index(dump,'Lz=').ne.0)then
             i=index(dump,'=')
             read(dump(i+1:),*) Input%Lz
-            write(iout,'(A,ES12.5)') '   Lz=', Input%Lz
+            write(iout,'(A,ES12.5)') '    Lz=', Input%Lz
         endif
 
         !!!___Noutput
         if(index(dump,'Noutput=').ne.0)then
             i=index(dump,'=')
             read(dump(i+1:),*) Input%Noutput
-            write(iout,'(A,I6)') '   Noutput=', Input%Noutput
+            write(iout,'(A,I6)') '    Noutput=', Input%Noutput
         endif
  
         !!!___dtoutput
         if(index(dump,'dtoutput=').ne.0)then
             i=index(dump,'=')
             read(dump(i+1:),*) Input%dtoutput
-            write(iout,'(A,ES12.5)') '   dtoutput=', Input%dtoutput
-        endif
-
-        !!!___Nl : nombre de fluides
-        if(index(dump,'Nl=').ne.0)then
-            i=index(dump,'=')
-            read(dump(i+1:),*) Input%Nl
-            write(iout,'(A,I3)') '   Nl=', Input%Nl
-            allocate(Input%f2m(1:Input%Nl))
-            !!!---lecture des affectations fluide -> materiaux
-            do k=1,Input%Nl
-                i=0
-                do while(i.eq.0)
-                   read(id,'(A)') dump
-                   if(scan(dump,'!#').eq.0) i=index(dump,'->')
-                enddo
-                read(dump(i+2:),*) Input%f2m(k)
-                write(iout,'(A,I3,A,I3)') '   fluid ', k, ' -> mat ', Input%f2m(k)
-            enddo
+            write(iout,'(A,ES12.5)') '    dtoutput=', Input%dtoutput
         endif
  
+        !!!___Soundspeed_mixt
+        if(index(dump,'soundspeed_mixt=').ne.0)then
+            i=index(dump,'=')
+            read(dump(i+1:),*) Input%soundspeed_mixt
+            if(Input%soundspeed_mixt.eq.2)then
+               write(iout,'(A)') '    soundspeed_mixt=Wood'
+            else
+               write(iout,'(A)') '    soundspeed_mixt=frozen'
+            endif
+        endif
+ 
+        !!!___Timescheme
+        if(index(dump,'tscheme=').ne.0)then
+            i=index(dump,'=')
+            read(dump(i+1:),*) Input%tscheme
+            write(iout,'(A,A)') '    tscheme=', Input%tscheme
+        endif
+ 
+        !!!___Reconstruction
+        if(index(dump,'reco=').ne.0)then
+            i=index(dump,'=')
+            read(dump(i+1:),*) Input%reco
+            write(iout,'(A,A)') '    reco=', Input%reco
+        endif
+
+        !!!___Limiteur
+        if(index(dump,'Limiteur=').ne.0)then
+            i=index(dump,'=')
+            read(dump(i+1:),*) Input%Limiteur
+            write(iout,'(A,A)') '    Limiteur=', Input%Limiteur
+        endif
+ 
+        !!!___just_thermo
+        if(index(dump,'just_thermo=').ne.0)then
+            i=index(dump,'=')
+            read(dump(i+1:),*) Input%just_thermo
+            write(iout,'(A,I2)') '    just_thermo=', Input%just_thermo
+        endif
+
+        !!!___CFL
+        if(index(dump,'CFL=').ne.0)then
+            i=index(dump,'=')
+            read(dump(i+1:),*) Input%CFL
+            write(iout,'(A,ES12.5)') '    CFL=', Input%CFL
+        endif
+
+
         !!!___MATERIAUX
         if(index(dump,'MATERIAUX').ne.0)then
 
+            write(iout,'(A)') '   --------------------------------------------------'
             write(iout,*) ''
-            write(iout,'(A)') '   --- MATERIAUX :'
+            write(iout,'(A)') '    MATERIAUX :'
             !lecture N
             i=0 ; do while(i.eq.0) ; read(id,'(A)') dump ;  i=index(dump,'Nmat=') ; enddo
             i=index(dump,'=') ; read(dump(i+1:),*) Input%Nmat 
-            write(iout,'(A9,I2)') '   Nmat: ', Input%Nmat
+            write(iout,'(A9,I2)') '    Nmat: ', Input%Nmat
             allocate(Input%mat(1:Input%Nmat))
     
             if(Input%Nmat.gt.0)then
@@ -132,7 +162,7 @@ do while(.not.fin)
                 do k=1,Input%Nmat
          
                     write(iout,*) ""
-                    write(iout,'(A12,I2,A41)') '   Materiau ', k , ' ========================================'
+                    write(iout,'(A,I2,A)') '    Materiau ', k , ' ======================================='
                     write(iout,*) ""
 
                     !lecture typ
@@ -302,27 +332,66 @@ do while(.not.fin)
             endif !!! Nmat>0
         endif !!! MATERIAUX
 
-
-        !!!___boites
-        if(index(dump,'Nboite=').ne.0)then
+        !!!___Nl : nombre de fluides
+        if(index(dump,'Nl=').ne.0)then
+            write(iout,'(A)') '   --------------------------------------------------'
             i=index(dump,'=')
-            read(dump(i+1:),*) Input%Nboite
-            write(iout,'(A,I2)') '   Nboite=', Input%Nboite
-            if(Input%Nboite.gt.0)then
-              allocate(Input%box(1:Input%Nboite))
-              k=0
-              do while(k.lt.Input%Nboite)
-                  read(id,'(A)') dump
-                  if(scan(dump,'!#').eq.0)THEN
-                    i=index(dump,'box=')
-                    if(i.gt.0)then
-                       k=k+1
-                       call readbox(dump(i:),Input%box(k))
-                    endif
-                  endif
-              enddo
-            endif
+            read(dump(i+1:),*) Input%Nl
+            write(iout,'(A,I3)') '    Nl=', Input%Nl
+            allocate(Input%f2m(1:Input%Nl))
+            !!!---lecture des affectations fluide -> materiaux
+            do k=1,Input%Nl
+                i=0
+                do while(i.eq.0)
+                   read(id,'(A)') dump
+                   if(scan(dump,'!#').eq.0) i=index(dump,'->')
+                enddo
+                read(dump(:i-1),*) j
+                read(dump(i+2:),*) Input%f2m(j)
+                write(iout,'(A,I3,A,I3)') '    fluid ', j, ' -> mat ', Input%f2m(j)
+            enddo
         endif
+
+        !!!___field
+        if(index(dump,'Nfield=').ne.0)then
+            write(iout,'(A)') '   --------------------------------------------------'
+            i=index(dump,'=')
+            read(dump(i+1:),*) Input%Nfield
+            write(iout,'(A,I2)') '    Nfield=', Input%Nfield
+            call flush(iout)
+            if(Input%Nfield.gt.0)then
+                allocate(Input%field(1:Input%Nfield))
+                k=0
+                do while(k.lt.Input%Nfield)
+                    read(id,'(A)') dump
+                    if(scan(dump,'!#').eq.0)THEN
+                        j=0
+                        do while(j.eq.0)
+                            read(id,'(A)') dump
+                            j=index(dump,'endfield')
+                            !!!---boite ?
+                            i=index(dump,'box=')
+                            l=index(dump,'=')
+                            if(i.gt.0)then
+                                k=k+1
+                                write(iout,'(A,I3,A)') '    field ', k, ' :'
+                                call flush(iout)
+                                call readbox(dump(i:),Input%field(k)%box)
+                            elseif(l.gt.0)then
+                                !!!---field
+                                Input%field(k)%Nvar=Input%field(k)%Nvar+1
+                                N=Input%field(k)%Nvar
+                                Input%field(k)%nom(N)=trim(adjustl(dump(:l-1)))
+                                read(dump(l+1:),*) Input%field(k)%val(N)
+                                write(iout,'(A,I3,A,A6,A,ES12.5)')      '        > var ', N,': nom=',&
+                                    adjustl(Input%field(k)%nom(N)), ' val=', Input%field(k)%val(N)
+                                call flush(iout)
+                            endif
+                        enddo !!! while j=index(enfield=0)
+                    endif !!! index !#
+                enddo !!! k=1,Nfield
+            endif !!! Nfield > 0
+        endif !!! index(Nfield)
 
         IF(index(dump,'FIN').ne.0)then
             FIN=.true.
@@ -486,7 +555,7 @@ subroutine read_mat(file_in,mat)
          if(j.gt.0)then
              j=index(dump,'=')
              read(dump(j+1:),*) mat%pinf
-             if(verb_mat) write(iout,*) '       > gam=', mat%pinf
+             if(verb_mat) write(iout,*) '       > pinf=', mat%pinf
          endif
          !!!--- R ---
          j=index(dump,'R=')
@@ -712,5 +781,134 @@ recursive function inside_dteta(teta0, teta1, teta2) result(inside)
    endif
 
 end function inside_dteta
+
+subroutine init_fields_from_input(M)
+
+    implicit none
+    type(mesh), intent(inout) :: M
+    integer :: i,j,k,ix,iy,iz,N
+    real(PR) :: val,f,sumf
+    character(len=3) :: num=''
+    character(len=30) :: var=''
+    logical :: init_f(1:30)
+
+    if(Input%Nfield.gt.0)then
+
+        do i=1,Input%Nfield
+
+            do iz=1,M%Nz ; do iy=1,M%Ny ; do ix=1,M%Nx
+
+                if(insidebox(M%x(ix),M%y(iy),M%z(iz),Input%field(i)%box))then
+ 
+                    init_f(1:M%Nl)=.false.
+                    
+                    do j=1,Input%field(i)%Nvar
+
+                        val=Input%field(i)%val(j)
+
+                        if(trim(adjustl(Input%field(i)%nom(j))).eq.'p')then
+                            M%MF(ix,iy,iz)%p=val
+                            M%MF(ix,iy,iz)%F(1:M%Nl)%p=val
+                        elseif(trim(adjustl(Input%field(i)%nom(j))).eq.'vx')then
+                            M%MF(ix,iy,iz)%vx=val
+                        elseif(trim(adjustl(Input%field(i)%nom(j))).eq.'vy')then
+                            M%MF(ix,iy,iz)%vy=val
+                        elseif(trim(adjustl(Input%field(i)%nom(j))).eq.'vz')then
+                            M%MF(ix,iy,iz)%vz=val
+                        elseif(trim(adjustl(Input%field(i)%nom(j))).eq.'rh')then
+                            M%MF(ix,iy,iz)%rh=val
+                            M%MF(ix,iy,iz)%F(1:M%Nl)%rh=val
+                        elseif(trim(adjustl(Input%field(i)%nom(j))).eq.'T')then
+                            M%MF(ix,iy,iz)%T=val
+                            M%MF(ix,iy,iz)%F(1:M%Nl)%T=val
+                        else
+
+                            do k=1,M%Nl
+
+                                write(num,'(I3)') k
+                                var='F'//trim(adjustl(num))
+                                if(ix.eq.10.and.iy.eq.1.and.iz.eq.1) write(iout,*) 'var=', var, 'vs',&
+                                trim(adjustl(Input%field(i)%nom(j)))
+                                if(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%f')then
+                                    M%MF(ix,iy,iz)%F(k)%f=val ; init_f(k)=.true.
+                                if(ix.eq.10.and.iy.eq.1.and.iz.eq.1) write(iout,*) 'coucou'
+                                !elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%Y')then
+                                !    M%MF(ix,iy,iz)%F(k)%Y=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%T')then
+                                    M%MF(ix,iy,iz)%F(k)%T=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%rh')then
+                                    M%MF(ix,iy,iz)%F(k)%rh=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%p')then
+                                    M%MF(ix,iy,iz)%F(k)%p=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%ee')then
+                                    M%MF(ix,iy,iz)%F(k)%ee=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%ee')then
+                                    M%MF(ix,iy,iz)%F(k)%eh=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%pinf')then
+                                    M%MF(ix,iy,iz)%F(k)%p_sge=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%gam')then
+                                    M%MF(ix,iy,iz)%F(k)%g_sge=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%mu')then
+                                    M%MF(ix,iy,iz)%F(k)%mu=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%sigy')then
+                                    M%MF(ix,iy,iz)%F(k)%sigy=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%a1')then
+                                    M%MF(ix,iy,iz)%F(k)%a(1)=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%a2')then
+                                    M%MF(ix,iy,iz)%F(k)%a(2)=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%a3')then
+                                    M%MF(ix,iy,iz)%F(k)%a(3)=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%b1')then
+                                    M%MF(ix,iy,iz)%F(k)%b(1)=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%b2')then
+                                    M%MF(ix,iy,iz)%F(k)%b(2)=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%b3')then
+                                    M%MF(ix,iy,iz)%F(k)%b(3)=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%c1')then
+                                    M%MF(ix,iy,iz)%F(k)%c(1)=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%c2')then
+                                    M%MF(ix,iy,iz)%F(k)%c(2)=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%c3')then
+                                    M%MF(ix,iy,iz)%F(k)%c(3)=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%sigma')then
+                                    M%MF(ix,iy,iz)%F(k)%sigma=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%cv')then
+                                    M%MF(ix,iy,iz)%F(k)%cv=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%Qe')then
+                                    M%MF(ix,iy,iz)%F(k)%Qe=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%Qpx')then
+                                    M%MF(ix,iy,iz)%F(k)%Qpx=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%Qpy')then
+                                    M%MF(ix,iy,iz)%F(k)%Qpy=val
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%Qpz')then
+                                    M%MF(ix,iy,iz)%F(k)%Qpz=val
+                                endif
+
+                            enddo !! k=1,Nl
+
+                                           
+                        endif !!! var.eq.p...
+
+                    enddo !!! Nvar
+
+                    !sumf=sum(M%MF(ix,iy,iz)%F(1:M%Nl)%f,init_f(1:M%Nl))
+                    !N=0
+                    !do k=1,M%Nl
+                    !    if(.not.init_f(k)) N=N+1
+                    !enddo
+                    !f=(1.0_PR-sumf)/real(N,PR)
+                    !do k=1,M%Nl
+                    !    if(.not.init_f(k)) M%MF(ix,iy,iz)%F(k)%f=f
+                    !enddo
+
+                endif !!! insidebox
+
+            enddo ; enddo ; enddo
+
+        enddo
+
+    endif
+
+end subroutine init_fields_from_input
 
 end module mod_input
