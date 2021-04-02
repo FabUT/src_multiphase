@@ -111,7 +111,7 @@ real(PR), allocatable :: U0(:,:), U1(:,:), U2(:,:) !!! 1:Nl+4 , 1:Nx
 real(PR), allocatable :: G0(:,:,:), G1(:,:,:), G2(:,:,:) !!! Nl, 11, Nx
 
 !!!---Vecteurs d'etats primitifs pour le schéma COMPACT
-real(PR), allocatable :: AdW(:), WL(:), WR(:), Wi(:), Wim1(:), Wip1(:), Deltai(:)
+real(PR), allocatable :: AdW(:), WL(:), WR(:)
 
 !!!---variables pour relaxation
 type(multifluide) :: MF0, MF01
@@ -543,13 +543,9 @@ subroutine init_euler_from_input(M)
 
     elseif(trim(adjustl(Input%tscheme)).eq.'COMPACT')then
 
-        allocate(WL(1:12*Nl+3))   ; WL=0.0_PR
-        allocate(WR(1:12*Nl+3))   ; WR=0.0_PR
-        allocate(Wi(1:12*Nl+3))   ; Wi=0.0_PR
-        allocate(Wip1(1:12*Nl+3)) ; Wip1=0.0_PR
-        allocate(Wim1(1:12*Nl+3)) ; Wim1=0.0_PR
-        allocate(Deltai(1:12*Nl+3)) ; Deltai=0.0_PR
-        allocate(AdW(1:12*Nl+3))  ; AdW=0.0_PR
+        allocate(WL(1:12*Nl+3))  ; WL=0.0_PR
+        allocate(WR(1:12*Nl+3))  ; WR=0.0_PR
+        allocate(AdW(1:12*Nl+3)) ; AdW=0.0_PR
 
         Timescheme => COMPACT
  
@@ -6752,282 +6748,60 @@ subroutine COMPACT(dt) !!!(Nl,N,SVL,SVR,ir,F,dt) !!!U,G,dt)
     !!! W=(alphai, rhi, vx, vy, vz, pi, a(1:3), b(1:3), c(1:3) )
     !!! cf. Saurel 2009 Appendix C.
     !!! cf/ Favrie et al. 2009 p 6053 section 4.1.1
-    !!! W(1:Nw) Nw=3+12*Nl
-    !!!1  alphai: W(i1:i2-1)
-    !!!2  rhi   : W(i2:i3-1)
-    !!!3  vx,y,z: W(i3:i4-1)
-    !!!4  pi    : W(i4:i5-1)
-    !!!5  a(1)i : W(i5:i6-1)
-    !!!6  a(2)i : W(i6:i7-1)
-    !!!7  a(3)i : W(i7:i8-1)
-    !!!8  b(1)i : W(i8:i9-1)
-    !!!9  b(2)i : W(i9:i10-1)
-    !!!10 b(3)i : W(i10:i11-1)
-    !!!11 c(1)i : W(i11:i12-1)
-    !!!12 c(2)i : W(i12:i13-1)
-    !!!13 c(3)i : W(i13:Nw)
     !!!-----------------------------
     real(PR), intent(in) :: dt
-    real(PR) :: c0, r
-    integer :: i, j, k, iph, ip1
-    logical :: test1, test2
+    real(PR) :: c0
+    integer :: i, j, k, iph
 
     dUdt=0.0_PR ; dGdt=0.0_PR
-
-    !!!----V2
-    !!!   i1=1 ; i2=i1+Nl ; i3=i2+Nl ; i4=i3+3 ; i5=i4+Nl ; i6=i5+Nl
-    !!!   i7=i6+Nl ; i8=i7+Nl ; i9=i8+Nl ; i10=i9+Nl, i11=i10+Nl, i12=i11+Nl
-    !!!   i13=i12+Nl
-
-    !!!   !!!---Wi
-    !!!   Wi(i1:i2-1)   = MF1D(1)%F(1:Nl)%f
-    !!!   Wi(i2:i3-1)   = MF1D(1)%F(1:Nl)%rh
-    !!!   Wi(i3)        = MF1D(1)%vx
-    !!!   Wi(i3+1)      = MF1D(1)%vy
-    !!!   Wi(i3+2)      = MF1D(1)%vz
-    !!!   Wi(i4:i5-1)   = MF1D(1)%F(1:Nl)%p
-    !!!   Wi(i5:i6-1)   = MF1D(1)%F(1:Nl)%a(1)
-    !!!   Wi(i6:i7-1)   = MF1D(1)%F(1:Nl)%a(2)
-    !!!   Wi(i7:i8-1)   = MF1D(1)%F(1:Nl)%a(3)
-    !!!   Wi(i8:i9-1)   = MF1D(1)%F(1:Nl)%b(1)
-    !!!   Wi(i9:i10-1)  = MF1D(1)%F(1:Nl)%b(2)
-    !!!   Wi(i10:i11-1) = MF1D(1)%F(1:Nl)%b(3)
-    !!!   Wi(i11:i12-1) = MF1D(1)%F(1:Nl)%c(1)
-    !!!   Wi(i12:i13-1) = MF1D(1)%F(1:Nl)%c(2)
-    !!!   Wi(i13:Nw)    = MF1D(1)%F(1:Nl)%c(3)
-
-    !!!   !!!---Wim1
-    !!!   Wim1=Wi
-
-    !!!   do ix=1,N1D
-    !!!       !!!---Wip1
-    !!!       ixp1=min(ix+1,N1D)
-    !!!       !!!---Wip1
-    !!!       Wip1(i1:i2-1)   = MF1D(1)%F(1:Nl)%f
-    !!!       Wip1(i2:i3-1)   = MF1D(1)%F(1:Nl)%rh
-    !!!       Wip1(i3)        = MF1D(1)%vx
-    !!!       Wip1(i3+1)      = MF1D(1)%vy
-    !!!       Wip1(i3+2)      = MF1D(1)%vz
-    !!!       Wip1(i4:i5-1)   = MF1D(1)%F(1:Nl)%p
-    !!!       Wip1(i5:i6-1)   = MF1D(1)%F(1:Nl)%a(1)
-    !!!       Wip1(i6:i7-1)   = MF1D(1)%F(1:Nl)%a(2)
-    !!!       Wip1(i7:i8-1)   = MF1D(1)%F(1:Nl)%a(3)
-    !!!       Wip1(i8:i9-1)   = MF1D(1)%F(1:Nl)%b(1)
-    !!!       Wip1(i9:i10-1)  = MF1D(1)%F(1:Nl)%b(2)
-    !!!       Wip1(i10:i11-1) = MF1D(1)%F(1:Nl)%b(3)
-    !!!       Wip1(i11:i12-1) = MF1D(1)%F(1:Nl)%c(1)
-    !!!       Wip1(i12:i13-1) = MF1D(1)%F(1:Nl)%c(2)
-    !!!       Wip1(i13:Nw)    = MF1D(1)%F(1:Nl)%c(3)
-    !!!       
-    !!!       !!!---Deltaim
-    !!!       Dxm=M%dxm(ix-1)
-    !!!       Deltaim=(Wi-Wim1)/Dxm
-
-    !!!       !!!---Deltaip
-    !!!       Dxp=M%dxm(ix)
-    !!!       Deltaim=(Wip1-Wi)/Dxp
-
-    !!!       !!!--Deltai
-    !!!       !!! r=(Wi-Wim1)/(Wip1-Wi)
-    !!!       test1=abs(Wip1-Wi).le.tolmuscl
-    !!!       test2=abs(Wi-Wim1).le.tolmuscl
-    !!!       if(test1.and.test2)then
-    !!!          Deltai=0.0_PR
-    !!!       else
-    !!!          if(test1)then
-    !!!             r=1.0e20_PR
-    !!!          elseif(test2)then
-    !!!             r=0.0_PR
-    !!!          else
-    !!!             r=(Wi-Wim1)/(Wip1-Wi)
-    !!!          endif
-    !!!          Deltai=LIMITEUR(r)
-    !!!       endif
-    !!!       !!!--- WL
-    !!!       WL=Wi-0.5_PR*Dxm*Deltai
-    !!!       WR=Wi+0.5_PR*Dxp*Deltai
-
-    !!!       !!!--- A
-    !!!       A=0.0_PR
-    !!!       ! vx sur diagonale
-    !!!       do i=1,Nw
-    !!!           A(i,i)=Wi(i3)
-    !!!       enddo
-    !!!       ! dependance de rhi à vx
-    !!!       A(i2:i3-1,i3)=W(i2:i3-1)
-    !!!       ! dependance de vx à alpha et pi
-    !!!       rhm1=1.0_PR/MF1D(ix)%rh
-    !!!       A(i3,i1:i2-1)=W(i4:i5-1)*rhm1 !!! dep à alpha
-    !!!       A(i3,i4:i5-1)=W(i1:i2-1)*rhm1 !!! dep à pi
-
-    !!!       ! dependance de la pression à vx
-    !!!       A(i4:i5-1,i3)=W(i2:i3-1)*MF1D(ix)%F(1:Nl)%c0**2
-
-    !!!       ! dependance de v à a,b,c
-    !!!           !!! précalcul
-    !!!       call init_Finger(MF1D(i)%F(iph))
-    !!!       !!!------------------ vx -------------------
-    !!!       !!! dep de vx à a
-    !!!       A(i3,i5:i6-1)=-rhm1*W(1:Nl)*dS11dai(1,1:Nl)
-    !!!       A(i3,i6:i7-1)=-rhm1*W(1:Nl)*dS11dai(2,1:Nl)
-    !!!       A(i3,i7:i8-1)=-rhm1*W(1:Nl)*dS11dai(3,1:Nl)
-    !!!       !!! dep de vx à b
-    !!!       A(i3,i8 :i9-1) =-rhm1*W(1:Nl)*dS11dbi(1,1:Nl)
-    !!!       A(i3,i9 :i10-1)=-rhm1*W(1:Nl)*dS11dbi(2,1:Nl)
-    !!!       A(i3,i10:i11-1)=-rhm1*W(1:Nl)*dS11dbi(3,1:Nl)
-    !!!       !!! dep de vx à c
-    !!!       A(i3,i11:i12-1)=-rhm1*W(1:Nl)*dS11dci(1,1:Nl)
-    !!!       A(i3,i12:i13-1)=-rhm1*W(1:Nl)*dS11dci(2,1:Nl)
-    !!!       A(i3,i13:Nw)   =-rhm1*W(1:Nl)*dS11dci(3,1:Nl)
-
-    !!!       !!!------------------ vy -------------------
-    !!!       !!! dep de vy à a
-    !!!       A(i3+1,i5:i6-1)=-rhm1*W(1:Nl)*dS12dai(1,1:Nl)
-    !!!       A(i3+1,i6:i7-1)=-rhm1*W(1:Nl)*dS12dai(2,1:Nl)
-    !!!       A(i3+1,i7:i8-1)=-rhm1*W(1:Nl)*dS12dai(3,1:Nl)
-    !!!       !!! dep de vy à b
-    !!!       A(i3+1,i8 :i9-1) =-rhm1*W(1:Nl)*dS12dbi(1,1:Nl)
-    !!!       A(i3+1,i9 :i10-1)=-rhm1*W(1:Nl)*dS12dbi(2,1:Nl)
-    !!!       A(i3+1,i10:i11-1)=-rhm1*W(1:Nl)*dS12dbi(3,1:Nl)
-    !!!       !!! dep de vy à c
-    !!!       A(i3+1,i11:i12-1)=-rhm1*W(1:Nl)*dS12dci(1,1:Nl)
-    !!!       A(i3+1,i12:i13-1)=-rhm1*W(1:Nl)*dS12dci(2,1:Nl)
-    !!!       A(i3+1,i13:Nw)   =-rhm1*W(1:Nl)*dS12dci(3,1:Nl)
-
-    !!!       !!!------------------ vz -------------------
-    !!!       !!! dep de vz à a
-    !!!       A(i3+2,i5:i6-1)=-rhm1*W(1:Nl)*dS13dai(1,1:Nl)
-    !!!       A(i3+2,i6:i7-1)=-rhm1*W(1:Nl)*dS13dai(2,1:Nl)
-    !!!       A(i3+2,i7:i8-1)=-rhm1*W(1:Nl)*dS13dai(3,1:Nl)
-    !!!       !!! dep de vz à b
-    !!!       A(i3+2,i8 :i9-1) =-rhm1*W(1:Nl)*dS13dbi(1,1:Nl)
-    !!!       A(i3+2,i9 :i10-1)=-rhm1*W(1:Nl)*dS13dbi(2,1:Nl)
-    !!!       A(i3+2,i10:i11-1)=-rhm1*W(1:Nl)*dS13dbi(3,1:Nl)
-    !!!       !!! dep de vz à c
-    !!!       A(i3+2,i11:i12-1)=-rhm1*W(1:Nl)*dS13dci(1,1:Nl)
-    !!!       A(i3+2,i12:i13-1)=-rhm1*W(1:Nl)*dS13dci(2,1:Nl)
-    !!!       A(i3+2,i13:Nw)   =-rhm1*W(1:Nl)*dS13dci(3,1:Nl)
-
-    !!!       ! dependance de a à vx
-    !!!       A(i5:i8-1,i3)=W(i5:i8-1)
-    !!!       ! dependance de a à vy
-    !!!       A(i5:i8-1,i3)=W(i8:i11-1)
-    !!!       ! dependance de a à vz
-    !!!       A(i5:i8-1,i3)=W(i11:Nw)
-
-    !!!       !!!--- dWdt
-    !!!       !!!dWdt=-A*(Wip1-Wi)/dx
-
-    !!!       WiL=WiL+0.5*dt/dx*A*(WiL-WiR)
-    !!!       WiR=WiR+0.5*dt/dx*A*(WiL-WiR)
-
-    !!!       !!!--- cellule suivante...
-    !!!       Wim1=Wi
-    !!!       Wi=Wip1
-    !!!   enddo
-
-    !!!---V1
 
     !!!--- PRIMITIVE TO CONSERVATIVE ---
     call primitive2conservative_1D
 
     !!!--- RECONSTRUCTION MUSCL MANDATORY---
-    !call MUSCL
-
-    !!---pour V2
-    Wi(1:Nl)            = MF1D(1)%F(1:Nl)%f
-    Wi(Nl+1:2*Nl)       = MF1D(1)%F(1:Nl)%rh
-    Wi(2*Nl+1)          = MF1D(1)%vx
-    Wi(2*Nl+2)          = MF1D(1)%vy
-    Wi(2*Nl+3)          = MF1D(1)%vz
-    Wi(2*Nl+4:3*Nl+3)   = MF1D(1)%F(1:Nl)%p
-    Wi(3*Nl+4:4*Nl+3)   = MF1D(1)%F(1:Nl)%a(1)
-    Wi(4*Nl+4:5*Nl+3)   = MF1D(1)%F(1:Nl)%a(2)
-    Wi(5*Nl+4:6*Nl+3)   = MF1D(1)%F(1:Nl)%a(3)
-    Wi(6*Nl+4:7*Nl+3)   = MF1D(1)%F(1:Nl)%b(1)
-    Wi(7*Nl+4:8*Nl+3)   = MF1D(1)%F(1:Nl)%b(2)
-    Wi(8*Nl+4:9*Nl+3)   = MF1D(1)%F(1:Nl)%b(3)
-    Wi(9*Nl+4:10*Nl+3)  = MF1D(1)%F(1:Nl)%c(1)
-    Wi(10*Nl+4:11*Nl+3) = MF1D(1)%F(1:Nl)%c(2)
-    Wi(11*Nl+4:12*Nl+3) = MF1D(1)%F(1:Nl)%c(3)
-
-    Wim1=Wi
+    call MUSCL
 
     do i=1,N1D
 
-        !!!---V2:
+        !!!--- WL
+        WL(1:Nl)            = MFrec_L(i)%F(1:Nl)%f
+        WL(Nl+1:2*Nl)       = MFrec_L(i)%F(1:Nl)%rh
+        WL(2*Nl+1)          = MFrec_L(i)%vx
+        WL(2*Nl+2)          = MFrec_L(i)%vy
+        WL(2*Nl+3)          = MFrec_L(i)%vz
+        WL(2*Nl+4:3*Nl+3)   = MFrec_L(i)%F(1:Nl)%p
+        WL(3*Nl+4:4*Nl+3)   = MFrec_L(i)%F(1:Nl)%a(1)
+        WL(4*Nl+4:5*Nl+3)   = MFrec_L(i)%F(1:Nl)%a(2)
+        WL(5*Nl+4:6*Nl+3)   = MFrec_L(i)%F(1:Nl)%a(3)
+        WL(6*Nl+4:7*Nl+3)   = MFrec_L(i)%F(1:Nl)%b(1)
+        WL(7*Nl+4:8*Nl+3)   = MFrec_L(i)%F(1:Nl)%b(2)
+        WL(8*Nl+4:9*Nl+3)   = MFrec_L(i)%F(1:Nl)%b(3)
+        WL(9*Nl+4:10*Nl+3)  = MFrec_L(i)%F(1:Nl)%c(1)
+        WL(10*Nl+4:11*Nl+3) = MFrec_L(i)%F(1:Nl)%c(2)
+        WL(11*Nl+4:12*Nl+3) = MFrec_L(i)%F(1:Nl)%c(3)
 
-        !!!---Wip1
-        ip1=min(i+1,N1D)
-        !!!---Wip1
-        Wip1(1:Nl)            = MF1D(ip1)%F(1:Nl)%f
-        Wip1(Nl+1:2*Nl)       = MF1D(ip1)%F(1:Nl)%rh
-        Wip1(2*Nl+1)          = MF1D(ip1)%vx
-        Wip1(2*Nl+2)          = MF1D(ip1)%vy
-        Wip1(2*Nl+3)          = MF1D(ip1)%vz
-        Wip1(2*Nl+4:3*Nl+3)   = MF1D(ip1)%F(1:Nl)%p
-        Wip1(3*Nl+4:4*Nl+3)   = MF1D(ip1)%F(1:Nl)%a(1)
-        Wip1(4*Nl+4:5*Nl+3)   = MF1D(ip1)%F(1:Nl)%a(2)
-        Wip1(5*Nl+4:6*Nl+3)   = MF1D(ip1)%F(1:Nl)%a(3)
-        Wip1(6*Nl+4:7*Nl+3)   = MF1D(ip1)%F(1:Nl)%b(1)
-        Wip1(7*Nl+4:8*Nl+3)   = MF1D(ip1)%F(1:Nl)%b(2)
-        Wip1(8*Nl+4:9*Nl+3)   = MF1D(ip1)%F(1:Nl)%b(3)
-        Wip1(9*Nl+4:10*Nl+3)  = MF1D(ip1)%F(1:Nl)%c(1)
-        Wip1(10*Nl+4:11*Nl+3) = MF1D(ip1)%F(1:Nl)%c(2)
-        Wip1(11*Nl+4:12*Nl+3) = MF1D(ip1)%F(1:Nl)%c(3)
-
-        !!!--Deltai
-        Deltai=(Wip1-Wi)
-        do j=1,12*Nl+3
-            if(abs(Deltai(j)).gt.tolmuscl)then
-                r=(Wi(j)-Wim1(j))/(Wip1(j)-Wi(j))
-                Deltai(j)=LIMITEUR(r)*Deltai(j)
-            endif
-        enddo
-
-        !!!--- WL/R
-        WL=Wi-0.5_PR*Deltai
-        WR=Wi+0.5_PR*Deltai
-
-        !!!---V1:
-
-        ! !!!--- WL
-        ! WL(1:Nl)            = MFrec_L(i)%F(1:Nl)%f
-        ! WL(Nl+1:2*Nl)       = MFrec_L(i)%F(1:Nl)%rh
-        ! WL(2*Nl+1)          = MFrec_L(i)%vx
-        ! WL(2*Nl+2)          = MFrec_L(i)%vy
-        ! WL(2*Nl+3)          = MFrec_L(i)%vz
-        ! WL(2*Nl+4:3*Nl+3)   = MFrec_L(i)%F(1:Nl)%p
-        ! WL(3*Nl+4:4*Nl+3)   = MFrec_L(i)%F(1:Nl)%a(1)
-        ! WL(4*Nl+4:5*Nl+3)   = MFrec_L(i)%F(1:Nl)%a(2)
-        ! WL(5*Nl+4:6*Nl+3)   = MFrec_L(i)%F(1:Nl)%a(3)
-        ! WL(6*Nl+4:7*Nl+3)   = MFrec_L(i)%F(1:Nl)%b(1)
-        ! WL(7*Nl+4:8*Nl+3)   = MFrec_L(i)%F(1:Nl)%b(2)
-        ! WL(8*Nl+4:9*Nl+3)   = MFrec_L(i)%F(1:Nl)%b(3)
-        ! WL(9*Nl+4:10*Nl+3)  = MFrec_L(i)%F(1:Nl)%c(1)
-        ! WL(10*Nl+4:11*Nl+3) = MFrec_L(i)%F(1:Nl)%c(2)
-        ! WL(11*Nl+4:12*Nl+3) = MFrec_L(i)%F(1:Nl)%c(3)
-
-        ! !!!--- WR
-        ! WR(1:Nl)            = MFrec_R(i)%F(1:Nl)%f
-        ! WR(Nl+1:2*Nl)       = MFrec_R(i)%F(1:Nl)%rh
-        ! WR(2*Nl+1)          = MFrec_R(i)%vx
-        ! WR(2*Nl+2)          = MFrec_R(i)%vy
-        ! WR(2*Nl+3)          = MFrec_R(i)%vz
-        ! WR(2*Nl+4:3*Nl+3)   = MFrec_R(i)%F(1:Nl)%p
-        ! WR(3*Nl+4:4*Nl+3)   = MFrec_R(i)%F(1:Nl)%a(1)
-        ! WR(4*Nl+4:5*Nl+3)   = MFrec_R(i)%F(1:Nl)%a(2)
-        ! WR(5*Nl+4:6*Nl+3)   = MFrec_R(i)%F(1:Nl)%a(3)
-        ! WR(6*Nl+4:7*Nl+3)   = MFrec_R(i)%F(1:Nl)%b(1)
-        ! WR(7*Nl+4:8*Nl+3)   = MFrec_R(i)%F(1:Nl)%b(2)
-        ! WR(8*Nl+4:9*Nl+3)   = MFrec_R(i)%F(1:Nl)%b(3)
-        ! WR(9*Nl+4:10*Nl+3)  = MFrec_R(i)%F(1:Nl)%c(1)
-        ! WR(10*Nl+4:11*Nl+3) = MFrec_R(i)%F(1:Nl)%c(2)
-        ! WR(11*Nl+4:12*Nl+3) = MFrec_R(i)%F(1:Nl)%c(3)
+        !!!--- WR
+        WR(1:Nl)            = MFrec_R(i)%F(1:Nl)%f
+        WR(Nl+1:2*Nl)       = MFrec_R(i)%F(1:Nl)%rh
+        WR(2*Nl+1)          = MFrec_R(i)%vx
+        WR(2*Nl+2)          = MFrec_R(i)%vy
+        WR(2*Nl+3)          = MFrec_R(i)%vz
+        WR(2*Nl+4:3*Nl+3)   = MFrec_R(i)%F(1:Nl)%p
+        WR(3*Nl+4:4*Nl+3)   = MFrec_R(i)%F(1:Nl)%a(1)
+        WR(4*Nl+4:5*Nl+3)   = MFrec_R(i)%F(1:Nl)%a(2)
+        WR(5*Nl+4:6*Nl+3)   = MFrec_R(i)%F(1:Nl)%a(3)
+        WR(6*Nl+4:7*Nl+3)   = MFrec_R(i)%F(1:Nl)%b(1)
+        WR(7*Nl+4:8*Nl+3)   = MFrec_R(i)%F(1:Nl)%b(2)
+        WR(8*Nl+4:9*Nl+3)   = MFrec_R(i)%F(1:Nl)%b(3)
+        WR(9*Nl+4:10*Nl+3)  = MFrec_R(i)%F(1:Nl)%c(1)
+        WR(10*Nl+4:11*Nl+3) = MFrec_R(i)%F(1:Nl)%c(2)
+        WR(11*Nl+4:12*Nl+3) = MFrec_R(i)%F(1:Nl)%c(3)
 
         !!!---alpha       
         do iph=1,Nl
            AdW(iph)=MF1D(i)%vx*(MFrec_L(i)%F(iph)%f-MFrec_R(i)%F(iph)%f)
+           !MFrec_L(i)%F(iph)%f=MFrec_L(i)%F(iph)%f+0.5_PR*dt*SVL(i)*AdW
+           !MFrec_R(i)%F(iph)%f=MFrec_R(i)%F(iph)%f+0.5_PR*dt*SVR(i)*AdW
         enddo
 
         !!!---rho     
@@ -7047,23 +6821,23 @@ subroutine COMPACT(dt) !!!(Nl,N,SVL,SVR,ir,F,dt) !!!U,G,dt)
         enddo
 
         !!! dependance de vx aux vecteurs de base
-        !do iph=1,Nl
-        !    !!! précalcul
-        !    call init_Finger(MF1D(i)%F(iph))
-        !    !!! dep de vx à al
-        !    do k=1,3
-        !     AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*dS11dai(k)*(MFrec_L(i)%F(iph)%a(k)-MFrec_R(i)%F(iph)%a(k))
-        !    enddo
-        !    !!! dep de vx à bl
-        !    do k=1,3
-        !     AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*dS11dbi(k)*(MFrec_L(i)%F(iph)%b(k)-MFrec_R(i)%F(iph)%b(k))
-        !    enddo
-        !    !!! dep de vx à cl
-        !    do k=1,3
-        !     AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*dS11dci(k)*(MFrec_L(i)%F(iph)%c(k)-MFrec_R(i)%F(iph)%c(k))
-        !    enddo
-        !    AdW(k)=AdW(k)-(MF1D(i)%F(iph)%sig(1,1)+MF1D(i)%p)*(MFrec_L(i)%F(iph)%f-MFrec_R(i)%F(iph)%f)
-        !enddo
+        do iph=1,Nl
+            !!! précalcul
+            call init_Finger(MF1D(i)%F(iph))
+            !!! dep de vx à al
+            do k=1,3
+             AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*dS11dai(k)*(MFrec_L(i)%F(iph)%a(k)-MFrec_R(i)%F(iph)%a(k))
+            enddo
+            !!! dep de vx à bl
+            do k=1,3
+             AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*dS11dbi(k)*(MFrec_L(i)%F(iph)%b(k)-MFrec_R(i)%F(iph)%b(k))
+            enddo
+            !!! dep de vx à cl
+            do k=1,3
+             AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*dS11dci(k)*(MFrec_L(i)%F(iph)%c(k)-MFrec_R(i)%F(iph)%c(k))
+            enddo
+            AdW(k)=AdW(k)-(MF1D(i)%F(iph)%sig(1,1)+MF1D(i)%p)*(MFrec_L(i)%F(iph)%f-MFrec_R(i)%F(iph)%f)
+        enddo
 
         AdW(k)=AdW(k)/MF1D(i)%rh
         AdW(k)=AdW(k)+MF1D(i)%vx*(MFrec_L(i)%vx-MFrec_R(i)%vx)
@@ -7074,23 +6848,23 @@ subroutine COMPACT(dt) !!!(Nl,N,SVL,SVR,ir,F,dt) !!!U,G,dt)
         !!!!---vy 
         k=2*Nl+2 ; AdW(k)=0.0_PR
         !!! dependance de vy aux vecteurs de base
-        !do iph=1,Nl
-        !    !!! précalcul
-        !    call init_Finger(MF1D(i)%F(iph))
-        !    !!! dep de vy à al
-        !    do k=1,3
-        !     AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds12dai(k)*(MFrec_L(i)%F(iph)%a(k)-MFrec_R(i)%F(iph)%a(k))
-        !    enddo
-        !    !!! dep de vy à bl
-        !    do k=1,3
-        !     AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds12dbi(k)*(MFrec_L(i)%F(iph)%b(k)-MFrec_R(i)%F(iph)%b(k))
-        !    enddo
-        !    !!! dep de vy à cl
-        !    do k=1,3
-        !     AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds12dci(k)*(MFrec_L(i)%F(iph)%c(k)-MFrec_R(i)%F(iph)%c(k))
-        !    enddo
-        !    AdW(k)=AdW(k)-(MF1D(i)%F(iph)%sig(1,2))*(MFrec_L(i)%F(iph)%f-MFrec_R(i)%F(iph)%f)
-        !enddo
+        do iph=1,Nl
+            !!! précalcul
+            call init_Finger(MF1D(i)%F(iph))
+            !!! dep de vy à al
+            do k=1,3
+             AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds12dai(k)*(MFrec_L(i)%F(iph)%a(k)-MFrec_R(i)%F(iph)%a(k))
+            enddo
+            !!! dep de vy à bl
+            do k=1,3
+             AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds12dbi(k)*(MFrec_L(i)%F(iph)%b(k)-MFrec_R(i)%F(iph)%b(k))
+            enddo
+            !!! dep de vy à cl
+            do k=1,3
+             AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds12dci(k)*(MFrec_L(i)%F(iph)%c(k)-MFrec_R(i)%F(iph)%c(k))
+            enddo
+            AdW(k)=AdW(k)-(MF1D(i)%F(iph)%sig(1,2))*(MFrec_L(i)%F(iph)%f-MFrec_R(i)%F(iph)%f)
+        enddo
 
         AdW(k)=AdW(k)/MF1D(i)%rh
         AdW(k)=AdW(k)+MF1D(i)%vx*(MFrec_L(i)%vy-MFrec_R(i)%vy)
@@ -7101,23 +6875,23 @@ subroutine COMPACT(dt) !!!(Nl,N,SVL,SVR,ir,F,dt) !!!U,G,dt)
         !!!!---vz
         k=2*Nl+3 ; AdW(k)=0.0_PR
         !!! dependance de vz aux vecteurs de base
-        !do iph=1,Nl
-        !    !!! précalcul
-        !    call init_Finger(MF1D(i)%F(iph))
-        !    !!! dep de vz à al
-        !    do k=1,3
-        !     AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds13dai(k)*(MFrec_L(i)%F(iph)%a(k)-MFrec_R(i)%F(iph)%a(k))
-        !    enddo
-        !    !!! dep de vz à bl
-        !    do k=1,3
-        !     AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds13dbi(k)*(MFrec_L(i)%F(iph)%b(k)-MFrec_R(i)%F(iph)%b(k))
-        !    enddo
-        !    !!! dep de vz à cl
-        !    do k=1,3
-        !     AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds13dci(k)*(MFrec_L(i)%F(iph)%c(k)-MFrec_R(i)%F(iph)%c(k))
-        !    enddo
-        !    AdW(k)=AdW(k)-(MF1D(i)%F(iph)%sig(1,3))*(MFrec_L(i)%F(iph)%f-MFrec_R(i)%F(iph)%f)
-        !enddo
+        do iph=1,Nl
+            !!! précalcul
+            call init_Finger(MF1D(i)%F(iph))
+            !!! dep de vz à al
+            do k=1,3
+             AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds13dai(k)*(MFrec_L(i)%F(iph)%a(k)-MFrec_R(i)%F(iph)%a(k))
+            enddo
+            !!! dep de vz à bl
+            do k=1,3
+             AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds13dbi(k)*(MFrec_L(i)%F(iph)%b(k)-MFrec_R(i)%F(iph)%b(k))
+            enddo
+            !!! dep de vz à cl
+            do k=1,3
+             AdW(k)=AdW(k)-MF1D(i)%F(iph)%f*ds13dci(k)*(MFrec_L(i)%F(iph)%c(k)-MFrec_R(i)%F(iph)%c(k))
+            enddo
+            AdW(k)=AdW(k)-(MF1D(i)%F(iph)%sig(1,3))*(MFrec_L(i)%F(iph)%f-MFrec_R(i)%F(iph)%f)
+        enddo
 
         AdW(k)=AdW(k)/MF1D(i)%rh
         AdW(k)=AdW(k)+MF1D(i)%vx*(MFrec_L(i)%vz-MFrec_R(i)%vz)
@@ -7253,9 +7027,7 @@ subroutine COMPACT(dt) !!!(Nl,N,SVL,SVR,ir,F,dt) !!!U,G,dt)
 
         MFrec_L(i)%c=soundspeed_mixt(MFrec_L(i))
 
-        !!!--- cellule suivante...
-        Wim1=Wi
-        Wi=Wip1
+        !!!-------------------------------------
 
     enddo
 

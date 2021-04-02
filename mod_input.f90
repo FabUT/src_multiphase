@@ -144,6 +144,12 @@ do while(.not.fin)
             write(iout,'(A,ES12.5)') '    CFL=', Input%CFL
         endif
 
+        !!!___EOS
+        if(index(dump,'EOS=').ne.0)then
+            i=index(dump,'=')
+            read(dump(i+1:),*) Input%EOS
+            write(iout,'(A,I2)') '    EOS=', Input%EOS
+        endif
 
         !!!___MATERIAUX
         if(index(dump,'MATERIAUX').ne.0)then
@@ -290,12 +296,26 @@ do while(.not.fin)
                                    read(dump(j+1:),*) Input%mat(k)%gam
                                    write(iout,*) '     > gam=', Input%mat(k)%gam
                                 endif
-                                !!!---modif de P0 ?
+                                !!!---modif de Pinf ?
                                 j=index(dump,'pinf=')
                                 if(j.gt.0)then
                                    j=index(dump,'=')
                                    read(dump(j+1:),*) Input%mat(k)%pinf
                                    write(iout,*) '     > pinf=', Input%mat(k)%pinf
+                                endif
+                                !!!---modif de q ?
+                                j=index(dump,'q=')
+                                if(j.gt.0)then
+                                   j=index(dump,'=')
+                                   read(dump(j+1:),*) Input%mat(k)%q
+                                   write(iout,*) '     > q=', Input%mat(k)%q
+                                endif
+                                !!!---modif de qp ?
+                                j=index(dump,'qp=')
+                                if(j.gt.0)then
+                                   j=index(dump,'=')
+                                   read(dump(j+1:),*) Input%mat(k)%qp
+                                   write(iout,*) '     > qp=', Input%mat(k)%qp
                                 endif
                                 !!!---modif de R ?
                                 j=index(dump,'R=')
@@ -543,19 +563,33 @@ subroutine read_mat(file_in,mat)
              read(dump(j+1:),*) mat%P0
              if(verb_mat) write(iout,*) '       > P0=', mat%P0
          endif
-         !!!--- eps ---
+         !!!--- gam ---
          j=index(dump,'gam=')
          if(j.gt.0)then
              j=index(dump,'=')
              read(dump(j+1:),*) mat%gam
              if(verb_mat) write(iout,*) '       > gam=', mat%gam
          endif
-         !!!--- eps ---
+         !!!--- pinf ---
          j=index(dump,'pinf=')
          if(j.gt.0)then
              j=index(dump,'=')
              read(dump(j+1:),*) mat%pinf
              if(verb_mat) write(iout,*) '       > pinf=', mat%pinf
+         endif
+         !!!--- q ---
+         j=index(dump,'q=')
+         if(j.gt.0)then
+             j=index(dump,'=')
+             read(dump(j+1:),*) mat%q
+             if(verb_mat) write(iout,*) '       > q=', mat%q
+         endif
+         !!!--- qp ---
+         j=index(dump,'qp=')
+         if(j.gt.0)then
+             j=index(dump,'=')
+             read(dump(j+1:),*) mat%qp
+             if(verb_mat) write(iout,*) '       > qp=', mat%qp
          endif
          !!!--- R ---
          j=index(dump,'R=')

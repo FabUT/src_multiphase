@@ -83,11 +83,13 @@ type fluide !!! conteneur avec toutes les grandeurs primitives
    real(PR) :: p=0.0_PR       !!! pression de phase
    real(PR) :: eh=0.0_PR      !!! énergie hydro de phase
    real(PR) :: ee=0.0_PR      !!! énergie elastique de phase
+   real(PR) :: c0=0.0_PR      !!! vitesse du son
 
    !!!--- EOS:
    integer :: iph
    !!!---Stiffened gas Equation constants (Nl)
    real(PR) :: p_sge, g_sge
+   real(PR) :: q=0.0_PR, qp=0.0_PR
 
    !!!---Mecanical properties (Nl)
    real(PR) :: sig(1:3,1:3)=0.0_PR !!! tenseur de contrainte
@@ -250,6 +252,9 @@ type input_data
     !!!---fluides:
     integer :: Nl=1
 
+    !!!---EOS:
+    integer :: EOS=1 ! 1: SGE, 2: SGET
+
     !!!---time-scheme:
     character(len=10) :: tscheme='RK1'
 
@@ -271,9 +276,6 @@ type input_data
 
     !!!---affectations fluides -> materiaux
     integer, allocatable :: f2m(:) !!! Nl
-
-    !!!---affectations fluides -> EOS
-    integer, allocatable :: EOS(:) !!! Nl: 1: gp, 2: SGE, 3: SGE2
 
     !!!---initialization
     integer :: Nfield=0

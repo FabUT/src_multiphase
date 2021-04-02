@@ -10,7 +10,7 @@ use mod_euler, only : Nl, Nx,init_euler, solve_euler, dtcfl,&
                       test_convection, test_SOD_air, test_eau_air,&
                       test_eau_air_strong, test_rar_rar, test_cavitation,&
                       test_cavitation2, test_relax,test_fil,test_fil2,&
-                      Teuler, Trelax, test_relax2, test_protection,&
+                      t_euler, t_relaxp, test_relax2, test_protection,&
                       test_relax3, test_Ndanou2015, test_meca,&
                       test_solid_solid_shock_tube, test_cavitation_Cu,&
                       test_advection_Cu,test_solid_gas_shock_tube,&
@@ -169,7 +169,7 @@ real(PR) :: t, dtloc, cp, cv
    ENDDO   !!!---it
 
 
-write(iout,fmt="(A3,2(A7,ES14.7,' '))") '   ', 'Teuler=', Teuler, 'Trelax=', Trelax
+write(iout,fmt="(A3,2(A7,ES14.7,' '))") '   ', 't_euler=', t_euler, 't_relaxp=', t_relaxp
 
 print*, 'maxvy=', maxval(M%MF(:,:,:)%vy), 'minvy=', minval(M%MF(:,:,:)%vy)
 

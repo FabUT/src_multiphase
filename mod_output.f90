@@ -2,8 +2,8 @@ module mod_output
 
 use mod_data
 
-use mod_euler, only : Nl, Nx, t_init_Finger,t_relax_p_sge_1,t_reset,t_src,&
-                      t_c2p, t_nc2p, t_tot
+use mod_euler, only : Nl, Nx, t_init_Finger,t_euler, t_EM, t_src, t_relaxp, t_reset,&
+                      t_p2c, t_c2p, t_nc2p, t_tot, t_reco
 
 implicit none
 
@@ -47,17 +47,17 @@ implicit none
       !!!---sondes
       if(outtime)then
       open(unit=4,file=trim(adjustl(FOLDER_OUT))//'time.dat', status='replace')
+      write(4,*) '# t_tot t_euler t_src t_p2c t_nc2p t_c2p t_relaxp t_reset t_reco'
       endif
 
       itwrite=1
-
 
    endif
 
 
    !!!----sorties sur les temps de calcul
    if(outtime)then
-   write(4,*) t_tot, t_c2p, t_src, t_nc2p, t_relax_p_sge_1, t_reset
+   write(4,*) t_tot, t_euler, t_src, t_p2c, t_nc2p, t_c2p, t_relaxp, t_reset, t_reco
    endif
 
 
