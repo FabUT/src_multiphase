@@ -68,6 +68,8 @@ logical :: MUSCL_REC=.true.
 
 logical :: radial=.false.
 
+logical :: initT=.false.
+
 !integer :: Nl !!! nombre de phases
 
 !!!---maillage
@@ -269,6 +271,10 @@ type input_data
 
     !!!---Just thermo
     integer :: just_thermo=0
+
+    !!!---Just thermo
+    integer :: isoT=0 !!! active le modèle de phases isothermes de Dr. Tholin.:
+                      !!! toutes les phases dans une cellule donnée ont la même température 
 
     !!!---matériaux:
     integer :: Nmat

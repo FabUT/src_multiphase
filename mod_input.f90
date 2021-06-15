@@ -1,6 +1,6 @@
 module mod_input
 
-use mod_data, only : iout, Input, mesh, materiaux, PR, Pi, boite
+use mod_data, only : iout, Input, mesh, materiaux, PR, Pi, boite, initT
 
 implicit none
 
@@ -135,6 +135,13 @@ do while(.not.fin)
             i=index(dump,'=')
             read(dump(i+1:),*) Input%just_thermo
             write(iout,'(A,I2)') '    just_thermo=', Input%just_thermo
+        endif
+
+        !!!___isoT
+        if(index(dump,'isoT=').ne.0)then
+            i=index(dump,'=')
+            read(dump(i+1:),*) Input%isoT
+            write(iout,'(A,I2)') '    isoT=', Input%isoT
         endif
 
         !!!___CFL
@@ -855,6 +862,7 @@ subroutine init_fields_from_input(M)
                         elseif(trim(adjustl(Input%field(i)%nom(j))).eq.'T')then
                             M%MF(ix,iy,iz)%T=val
                             M%MF(ix,iy,iz)%F(1:M%Nl)%T=val
+                            initT=.True.
                         else
 
                             do k=1,M%Nl
@@ -865,9 +873,9 @@ subroutine init_fields_from_input(M)
                                 trim(adjustl(Input%field(i)%nom(j)))
                                 if(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%f')then
                                     M%MF(ix,iy,iz)%F(k)%f=val ; init_f(k)=.true.
-                                if(ix.eq.10.and.iy.eq.1.and.iz.eq.1) write(iout,*) 'coucou'
-                                !elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%Y')then
-                                !    M%MF(ix,iy,iz)%F(k)%Y=val
+                                !if(ix.eq.10.and.iy.eq.1.and.iz.eq.1) write(iout,*) 'coucou'
+                                elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%Y')then
+                                    M%MF(ix,iy,iz)%F(k)%Y=val
                                 elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%T')then
                                     M%MF(ix,iy,iz)%F(k)%T=val
                                 elseif(trim(adjustl(Input%field(i)%nom(j))).eq.trim(var)//'%rh')then

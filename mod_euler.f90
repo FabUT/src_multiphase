@@ -1,7 +1,7 @@
 module mod_euler
 
 
-use mod_data, only : it, PR, iout, mesh, multifluide, fluide, radial, Input
+use mod_data, only : it, PR, iout, mesh, multifluide, fluide, radial, Input, initT
 
 use mod_input, only : init_fields_from_input
 
@@ -60,6 +60,7 @@ type :: phase
    procedure(energie_hydro_sge), nopass, pointer :: energie_hydro
    procedure(pressure_star_sge), nopass, pointer :: pressure_star
    procedure(T_from_rP_sge), nopass, pointer :: T_from_rP
+   procedure(rh_from_PT_sgeT), nopass, pointer :: rh_from_PT
 end type phase
 
 type(phase), allocatable :: ph(:)
@@ -573,15 +574,20 @@ subroutine init_euler_from_input(M)
 
     call init_fields_from_input(M)
 
+    if(Input%isoT.eq.1)then
+        if(initT)then
+           forall(iph=1:M%Nl,i=1:M%Nx,j=1:M%Ny,k=1:M%Nz) M%MF(i,j,k)%F(iph)%rh=ph(iph)%rh_from_PT(M%MF(i,j,k)%F(iph),M%MF(i,j,k)%F(iph)%p,M%MF(i,j,k)%F(iph)%T)
+        else
+           write(iout,*) "      > ERREUR init_euler_from_input: si isoT=1, specifier la temperature dans le input.dat !!!"
+           stop
+        endif
+    endif
+
     forall(i=1:M%Nx,j=1:M%Ny,k=1:M%Nz) M%MF(i,j,k)%rh=sum(M%MF(i,j,k)%F(1:M%Nl)%f*M%MF(i,j,k)%F(1:M%Nl)%rh)
 
     forall(iph=1:M%Nl,i=1:M%Nx,j=1:M%Ny,k=1:M%Nz) M%MF(i,j,k)%F(iph)%Y=M%MF(i,j,k)%F(iph)%f*M%MF(i,j,k)%F(iph)%rh/M%MF(i,j,k)%rh
 
-    do k=1,M%Nz ; do j=1,M%Ny ; do i=1,M%Nx ; do iph=1,M%Nl
-        !M%MF(i,j,k)%elh(iph)=ph(iph)%energie_hydro(iph,M%MF(i,j,k)%rhl(iph),M%MF(i,j,k)%pl(iph),M%MF(i,j,k))
-        !M%MF(i,j,k)%elh(iph)=energie_hydro_sge(M%MF(i,j,k)%g_sge(iph),M%MF(i,j,k)%p_sge(iph),M%MF(i,j,k)%rhl(iph),M%MF(i,j,k)%pl(iph))
-        M%MF(i,j,k)%F(iph)%eh=ph(iph)%energie_hydro(M%MF(i,j,k)%F(iph),M%MF(i,j,k)%F(iph)%rh,M%MF(i,j,k)%F(iph)%p)
-    enddo ; enddo ; enddo ; enddo
+    forall(iph=1:M%Nl,i=1:M%Nx,j=1:M%Ny,k=1:M%Nz) M%MF(i,j,k)%F(iph)%eh=ph(iph)%energie_hydro(M%MF(i,j,k)%F(iph),M%MF(i,j,k)%F(iph)%rh,M%MF(i,j,k)%F(iph)%p)
 
     write(iout,*) ' MAJ meca'
 
@@ -1856,7 +1862,7 @@ end subroutine MAJ_THERMO
 
 !!!============== EOS SGET ==================
 
-real(PR) function pressure_sgeT(F,rh,u)
+pure real(PR) function pressure_sgeT(F,rh,u)
 
    implicit none
    !!! stiffened gas equation with temperature
@@ -1868,7 +1874,7 @@ real(PR) function pressure_sgeT(F,rh,u)
 
 end function pressure_sgeT
 
-real(PR) function energie_hydro_sgeT(F,rh,p)
+pure real(PR) function energie_hydro_sgeT(F,rh,p)
 
    implicit none
    !!! e=(p+GammP0)/(rho*(Gam-1)) + q !!! J/kg
@@ -1904,10 +1910,9 @@ real(PR) function soundspeed_sgeT(F,rh,p)
 
 end function soundspeed_sgeT
 
-real(PR) function pressure_star_sgeT(F,rs)
+pure real(PR) function pressure_star_sgeT(F,rs)
 
    implicit none
-   !!!integer, intent(in) :: iph
    real(PR), intent(in) :: rs
    type(fluide), intent(in) :: F
    real(PR) :: G, Gm1, Gp1, nus, nu0, p0, pinf, e0
@@ -1921,10 +1926,9 @@ real(PR) function pressure_star_sgeT(F,rs)
 
 end function pressure_star_sgeT
 
-real(PR) function T_from_rP_sgeT(F,rh,p)
+pure real(PR) function T_from_rP_sgeT(F,rh,p)
 
    implicit none
-   !!!integer, intent(in) :: iph
    real(PR), intent(in) :: rh, p
    type(fluide), intent(in) :: F
 
@@ -1933,7 +1937,7 @@ real(PR) function T_from_rP_sgeT(F,rh,p)
 
 end function T_from_rP_sgeT
 
-real(PR) function T_from_pe_sgeT(F,p,e)
+pure real(PR) function T_from_pe_sgeT(F,p,e)
 
    implicit none
    !!!integer, intent(in) :: iph
@@ -1945,10 +1949,9 @@ real(PR) function T_from_pe_sgeT(F,p,e)
 
 end function T_from_pe_sgeT
 
-real(PR) function T_from_re_sgeT(F,rh,e)
+pure real(PR) function T_from_re_sgeT(F,rh,e)
 
    implicit none
-   !!!integer, intent(in) :: iph
    real(PR), intent(in) :: rh, e
    type(fluide), intent(in) :: F
 
@@ -1957,14 +1960,22 @@ real(PR) function T_from_re_sgeT(F,rh,e)
 
 end function T_from_re_sgeT
 
+pure real(PR) function rh_from_PT_sgeT(F,P,T)
 
+   implicit none
+   real(PR), intent(in) :: P, T
+   type(fluide), intent(in) :: F
 
+   !!!--- formule 16 de Pepitas 2009 p 752
+   rh_from_PT_sgeT=(P+F%p_sge)/((F%g_sge-1.0_PR)*F%Cv*T)
+
+end function rh_from_PT_sgeT
 
 !!!============== EOS SGE ==================
 
 !!!---V2: iph et F en argument !!!! 
 
-real(PR) function pressure_sge(F,rh,u)
+pure real(PR) function pressure_sge(F,rh,u)
 
    implicit none
    !!! stiffened gas equation
@@ -1993,7 +2004,7 @@ real(PR) function pressure_sge(F,rh,u)
 
 end function pressure_sge
 
-real(PR) function energie_hydro_sge(F,rh,p)
+pure real(PR) function energie_hydro_sge(F,rh,p)
 
    implicit none
    !!! p=rho(Gam-1)e-GammP0  !!! Pa
@@ -2041,7 +2052,7 @@ real(PR) function soundspeed_sge(F,rh,p)
 
 end function soundspeed_sge
 
-real(PR) function pressure_star_sge(F,rs)
+pure real(PR) function pressure_star_sge(F,rs)
 
    implicit none
    !!!integer, intent(in) :: iph
@@ -2062,7 +2073,6 @@ real(PR) function pressure_star_sge(F,rs)
    !Gp1=(G+1.0_PR)
    !pressure_star_sge=(-F%sigl(iph,1,1)+F%p_sge(iph))*(Gm1*F%rhl(iph)-Gp1*rs)/(Gm1*rs-Gp1*F%rhl(iph))-F%p_sge(iph) 
 
-
    !!!---Equation (57) p 6065 Favrie 2009 + eos sge
    !G=F%g_sge(iph)
    !Gm1=(G-1.0_PR)
@@ -2077,7 +2087,7 @@ real(PR) function pressure_star_sge(F,rs)
 
 end function pressure_star_sge
 
-real(PR) function pressure_star_sge2(F0,Fs)
+pure real(PR) function pressure_star_sge2(F0,Fs)
 
    implicit none
    !integer, intent(in) :: iph
@@ -2171,7 +2181,7 @@ end function pressure_star_sge2
 !
 !end function pressure_star_sge2
 
-real(PR) function ddnu_energie_hydro_sge(F,rh,p)
+pure real(PR) function ddnu_energie_hydro_sge(F,rh,p)
 
    implicit none
    !!! e=(p+GammP0)/(rho*(Gam-1)) !!! J/kg
@@ -2184,7 +2194,7 @@ real(PR) function ddnu_energie_hydro_sge(F,rh,p)
 
 end function ddnu_energie_hydro_sge
 
-real(PR) function ddp_energie_hydro_sge(F,rh,p)
+pure real(PR) function ddp_energie_hydro_sge(F,rh,p)
 
    implicit none
    !!! e=(p+GammP0)/(rho*(Gam-1)) !!! J/kg
@@ -2197,7 +2207,7 @@ real(PR) function ddp_energie_hydro_sge(F,rh,p)
 
 end function ddp_energie_hydro_sge
 
-real(PR) function u_from_TP_sge(F,T,p)
+pure real(PR) function u_from_TP_sge(F,T,p)
 
    implicit none
    !!! e=(p+GammP0)/(rho*(Gam-1)) !!! J/kg
@@ -2210,7 +2220,7 @@ real(PR) function u_from_TP_sge(F,T,p)
 
 end function u_from_TP_sge
 
-real(PR) function r_from_uP_sge(F,u,P)
+pure real(PR) function r_from_uP_sge(F,u,P)
 
    implicit none
    !!! e=(p+GammP0)/(rho*(Gam-1)) !!! J/kg
@@ -2223,8 +2233,8 @@ real(PR) function r_from_uP_sge(F,u,P)
                  (u*(F%g_sge-1.0_PR))
 
 end function r_from_uP_sge
-!
-real(PR) function T_from_rP_sge(F,rh,p)
+
+pure real(PR) function T_from_rP_sge(F,rh,p)
 
    implicit none
    !!!integer, intent(in) :: iph
@@ -2236,7 +2246,6 @@ real(PR) function T_from_rP_sge(F,rh,p)
 
 end function T_from_rP_sge
 
-!
 !real(PR) function energie_hydro_sge(iph,F,rh,p)
 !
 !   implicit none
@@ -2252,10 +2261,6 @@ end function T_from_rP_sge
 !   energie_hydro_sge=( p + F%g_sge(iph)*F%p_sge(iph) )/( (F%g_sge(iph) - 1.0_PR)*rh )
 !
 !end function energie_hydro_sge
-
-
-
-
 
 !!!______________________________________
 
@@ -7848,8 +7853,6 @@ subroutine crash(message)
 
 end subroutine crash
 
-
-
 subroutine init_multifluide(MF)
 
     implicit none
@@ -8021,7 +8024,9 @@ subroutine init_phase(M)
             write(iout,*) '     > energie_hydro => energie_hydro_sge'
             ph(iph)%pressure_star => pressure_star_sge 
             write(iout,*) '     > pressure_star => pressure_star_sge'
- 
+            ph(iph)%rh_from_PT => rh_from_PT_sgeT
+            write(iout,*) '     > rh_from_PT     => rh_from_PT_sgeT'
+   
         elseif(ph(iph)%typ.eq.2)then
  
             call read_table(iph,trim(adjustl(ph(iph)%filetab)))
@@ -8039,7 +8044,9 @@ subroutine init_phase(M)
             write(iout,*) '     > energie_hydro => energie_hydro_sge'
             ph(iph)%pressure_star => pressure_star_sge 
             write(iout,*) '     > pressure_star => pressure_star_sge'
- 
+            ph(iph)%rh_from_PT => rh_from_PT_sgeT
+            write(iout,*) '     > rh_from_PT     => rh_from_PT_sgeT'
+
         elseif(ph(iph)%typ.eq.3)then
  
             imat=ph(iph)%imat
@@ -8062,7 +8069,9 @@ subroutine init_phase(M)
             write(iout,*) '     > pressure_star => pressure_star_sge'
             ph(iph)%T_from_rP => T_from_rP_sge
             write(iout,*) '     > T_from_rP     => T_from_rP_sge'
- 
+            ph(iph)%rh_from_PT => rh_from_PT_sgeT
+            write(iout,*) '     > rh_from_PT     => rh_from_PT_sgeT'
+
         elseif(ph(iph)%typ.eq.4)then
  
             imat=ph(iph)%imat
@@ -8086,6 +8095,8 @@ subroutine init_phase(M)
             write(iout,*) '     > pressure_star => pressure_star_sgeT'
             ph(iph)%T_from_rP => T_from_rP_sgeT
             write(iout,*) '     > T_from_rP     => T_from_rP_sgeT'
+            ph(iph)%rh_from_PT => rh_from_PT_sgeT
+            write(iout,*) '     > rh_from_PT     => rh_from_PT_sgeT'
  
         endif
  
