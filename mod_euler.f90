@@ -1971,6 +1971,48 @@ pure real(PR) function rh_from_PT_sgeT(F,P,T)
 
 end function rh_from_PT_sgeT
 
+!!!--- derivees pour Newton
+
+pure real(PR) function dedT_rho_sgeT(F,T,nu)
+
+   implicit none
+   real(PR), intent(in) :: T, nu
+   type(fluide), intent(in) :: F
+
+   dedT_rho_sgeT=F%Cv
+
+end function dedT_rho_sgeT
+
+pure real(PR) function dednu_T_sgeT(F,T,nu)
+
+   implicit none
+   real(PR), intent(in) :: T, nu
+   type(fluide), intent(in) :: F
+
+   dednu_T_sgeT=F%p_sge
+
+end function dednu_T_sgeT
+
+pure real(PR) function dPdT_rho_sgeT(F,T,nu)
+
+   implicit none
+   real(PR), intent(in) :: T, nu
+   type(fluide), intent(in) :: F
+
+   dPdT_rho_sgeT=(F%g_sge-1.0_PR)*F%Cv/nu
+
+end function dPdT_rho_sgeT
+
+pure real(PR) function dPdnu_T_sgeT(F,T,nu)
+
+   implicit none
+   real(PR), intent(in) :: T, nu
+   type(fluide), intent(in) :: F
+
+   dPdnu_T_sgeT=-(F%g_sge-1.0_PR)*F%Cv*T/nu**2
+
+end function dPdnu_T_sgeT
+
 !!!============== EOS SGE ==================
 
 !!!---V2: iph et F en argument !!!! 
@@ -7790,7 +7832,6 @@ subroutine My_Newton(N,x,xmin,xmax,F,DF)
    call F(1,x,fx)
    tol=abs(fx(1))
    it=0
-
 
    do while(tol.gt.1.0e-6_PR.and.it.lt.10000)
  
